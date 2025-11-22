@@ -7,7 +7,7 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Hello bro'),
+        title: Text('Rent Mate'),
         actions: [
           TextButton(onPressed: () {}, child: Text('azhikode')),
         ],
@@ -46,18 +46,18 @@ class HomeScreen extends StatelessWidget {
           // Category list
           SliverToBoxAdapter(
             child: SizedBox(
-              height: 40,
+              height: 120,
               child: CaategoryList(),
             ),
           ),
 
           // Title text
           SliverPadding(
-            padding: EdgeInsets.all(15),
+            padding: EdgeInsets.all(11),
             sliver: SliverToBoxAdapter(
               child: Text(
                 "Recommendation",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
               ),
             ),
           ),
@@ -97,12 +97,42 @@ class ItemWidget extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Align(alignment: AlignmentGeometry.topRight, child: FavoriteButton()),
-          Center(child: Image.asset('assets/images/logo.png', width: 100)),
+          Align(
+            alignment: Alignment.topRight,
+            child: FavoriteButton(),
+          ),
+
+          Center(
+            child: Image.asset(
+              'assets/images/dodge.png',
+              width: 100,
+            ),
+          ),
+
           SizedBox(height: 10),
 
-          Text("₹"),
-          Text("name"),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 15.0),
+            child: Text(
+              "₹80000",
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            ),
+          ),
+
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 15.0),
+            child: Text(
+              "name",
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 15.0),
+            child: Text(
+              "Description",
+              style: TextStyle(fontSize: 18),
+            ),
+          ),
         ],
       ),
     );
@@ -143,15 +173,34 @@ class CaategoryList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
+    return ListView.separated(
+      padding: const EdgeInsets.only(left: 15, right: 15),
+      itemBuilder: (context, index) => SizedBox(
+        child: Column(
+          spacing: 4,
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(6),
+                color: Colors.blue,
+              ),
+              width: 80,
+              height: 80,
+            ),
+            Text(
+              'Cars',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+            ),
+          ],
+        ),
+      ),
+      itemCount: 20,
+      separatorBuilder: (context, index) => SizedBox(
+        width: 10,
+      ),
       scrollDirection: Axis.horizontal,
-      children: [
-        Container(width: 30, height: 30, color: Colors.amber),
-        SizedBox(width: 8),
-        Container(width: 30, height: 30, color: Colors.amber),
-        SizedBox(width: 8),
-        Container(width: 30, height: 30, color: Colors.amber),
-      ],
     );
   }
 }
