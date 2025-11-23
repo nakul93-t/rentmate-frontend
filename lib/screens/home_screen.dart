@@ -6,73 +6,97 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      extendBody: true,
+      extendBodyBehindAppBar: true,
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
-        title: Text('Rent Mate'),
-        actions: [
-          TextButton(onPressed: () {}, child: Text('azhikode')),
-        ],
+        backgroundColor: Colors.transparent,
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Image.asset('assets/images/app logo.png', width: 100),
+            TextButton(onPressed: () {}, child: Text('azhikode')),
+          ],
+        ),
       ),
-      body: CustomScrollView(
-        slivers: [
-          // Search bar + notifications
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.all(15.0),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      decoration: InputDecoration(
-                        suffixIcon: Icon(Icons.search),
-                        hintText: "Search karo",
-                        fillColor: Colors.white,
-                        filled: true,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.all(Radius.circular(12)),
+      body: Stack(
+        children: [
+          Image.asset(
+            'assets/images/backs.png',
+            height: 175,
+            width: double.infinity,
+            fit: BoxFit.cover,
+          ),
+          SafeArea(
+            child: CustomScrollView(
+              slivers: [
+                // Search bar + notifications
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.all(15.0),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            decoration: InputDecoration(
+                              suffixIcon: Icon(Icons.search),
+                              hintText: "Search karo",
+                              fillColor: Colors.white,
+                              filled: true,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.all(
+                                  Radius.circular(12),
+                                ),
+                              ),
+                            ),
+                          ),
                         ),
+                        SizedBox(width: 8),
+                        IconButton(
+                          icon: Icon(Icons.notifications),
+                          onPressed: () {},
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // Category list
+                SliverToBoxAdapter(
+                  child: SizedBox(
+                    height: 120,
+                    child: CaategoryList(),
+                  ),
+                ),
+
+                // Title text
+                SliverPadding(
+                  padding: EdgeInsets.all(11),
+                  sliver: SliverToBoxAdapter(
+                    child: Text(
+                      "Recommendation",
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
-                  SizedBox(width: 8),
-                  IconButton(
-                    icon: Icon(Icons.notifications),
-                    onPressed: () {},
+                ),
+
+                // Infinite Scrollable Grid
+                SliverPadding(
+                  padding: EdgeInsets.all(15),
+                  sliver: SliverGrid.count(
+                    crossAxisCount: 2,
+                    crossAxisSpacing: 10,
+                    mainAxisSpacing: 10,
+                    childAspectRatio: 2.4 / 4,
+                    children: List.generate(20, (index) {
+                      return ItemWidget();
+                    }),
                   ),
-                ],
-              ),
-            ),
-          ),
-
-          // Category list
-          SliverToBoxAdapter(
-            child: SizedBox(
-              height: 120,
-              child: CaategoryList(),
-            ),
-          ),
-
-          // Title text
-          SliverPadding(
-            padding: EdgeInsets.all(11),
-            sliver: SliverToBoxAdapter(
-              child: Text(
-                "Recommendation",
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-              ),
-            ),
-          ),
-
-          // Infinite Scrollable Grid
-          SliverPadding(
-            padding: EdgeInsets.all(15),
-            sliver: SliverGrid.count(
-              crossAxisCount: 2,
-              crossAxisSpacing: 10,
-              mainAxisSpacing: 10,
-              childAspectRatio: 3 / 4,
-              children: List.generate(20, (index) {
-                return ItemWidget();
-              }),
+                ),
+              ],
             ),
           ),
         ],
@@ -97,15 +121,27 @@ class ItemWidget extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Align(
-            alignment: Alignment.topRight,
-            child: FavoriteButton(),
-          ),
-
           Center(
-            child: Image.asset(
-              'assets/images/dodge.png',
-              width: 100,
+            child: Stack(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.only(
+                    topLeft: Radius.circular(12),
+                    topRight: Radius.circular(12),
+                  ),
+                  child: Image.asset(
+                    'assets/images/dodge.png',
+                    // width: 100,
+                    width: double.infinity,
+                    height: 150,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+                Align(
+                  alignment: Alignment.topRight,
+                  child: FavoriteButton(),
+                ),
+              ],
             ),
           ),
 
@@ -157,6 +193,10 @@ class _FavoriteButtonState extends State<FavoriteButton> {
       icon: Icon(Icons.favorite),
       color: isFavorite ? Colors.red : Colors.grey,
       iconSize: 16,
+      style: IconButton.styleFrom(
+        backgroundColor: Colors.white,
+        padding: EdgeInsets.all(4),
+      ),
       // padding: EdgeInsets.zero,
       constraints: BoxConstraints(),
       onPressed: () {

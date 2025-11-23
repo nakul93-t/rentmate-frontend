@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:rentmate/screens/chat_screen.dart';
 import 'package:rentmate/screens/home_screen.dart';
 import 'package:rentmate/screens/profile_screen.dart';
-import 'package:rentmate/screens/second_screen.dart';
+import 'package:rentmate/screens/Myadds_screen.dart';
 
 class AppShell extends StatefulWidget {
   const AppShell({super.key});
@@ -14,7 +14,7 @@ class AppShell extends StatefulWidget {
 List<Widget> pages = [
   HomeScreen(),
   ChatScreen(),
-  SecondScreen(),
+  MyAddsListPage(),
   ProfileScreen(),
 ];
 
@@ -62,24 +62,60 @@ class _AppShellState extends State<AppShell> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: pages[_selectedIndex],
-      bottomNavigationBar: BottomNavigationBar(
-        showUnselectedLabels: true,
-        currentIndex: _selectedIndex,
-        selectedItemColor: const Color.fromARGB(
-          255,
-          37,
-          153,
-          248,
-        ), // selected icon color
-        unselectedItemColor: const Color.fromARGB(255, 133, 145, 151),
-        onTap: (value) {
-          print(value);
+
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
           setState(() {
-            _selectedIndex = value;
+            _selectedIndex = 2; // Ads page (middle)
           });
         },
-        items: bottomNavigationBarItems,
+        child: Icon(Icons.add),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+
+      bottomNavigationBar: BottomAppBar(
+        shape: CircularNotchedRectangle(),
+        notchMargin: 8,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            IconButton(
+              icon: Icon(
+                Icons.home,
+                color: _selectedIndex == 0 ? Colors.blue : Colors.grey,
+              ),
+              onPressed: () => setState(() => _selectedIndex = 0),
+            ),
+
+            IconButton(
+              icon: Icon(
+                Icons.chat,
+                color: _selectedIndex == 1 ? Colors.blue : Colors.grey,
+              ),
+              onPressed: () => setState(() => _selectedIndex = 1),
+            ),
+
+            SizedBox(width: 40), // space for FAB
+
+            IconButton(
+              icon: Icon(
+                Icons.ads_click,
+                color: _selectedIndex == 2 ? Colors.blue : Colors.grey,
+              ),
+              onPressed: () => setState(() => _selectedIndex = 2),
+            ),
+
+            IconButton(
+              icon: Icon(
+                Icons.person,
+                color: _selectedIndex == 3 ? Colors.blue : Colors.grey,
+              ),
+              onPressed: () => setState(() => _selectedIndex = 3),
+            ),
+          ],
+        ),
       ),
     );
+    ;
   }
 }

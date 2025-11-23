@@ -146,8 +146,7 @@ class _QuickActionButtons extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
-            SizedBox(
-              width: 180,
+            Expanded(
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   shape: RoundedRectangleBorder(
@@ -161,8 +160,7 @@ class _QuickActionButtons extends StatelessWidget {
                 ),
               ),
             ),
-            SizedBox(
-              width: 180,
+            Expanded(
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   shape: RoundedRectangleBorder(
@@ -181,8 +179,7 @@ class _QuickActionButtons extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
-            SizedBox(
-              width: 180,
+            Expanded(
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   shape: RoundedRectangleBorder(
@@ -199,8 +196,7 @@ class _QuickActionButtons extends StatelessWidget {
                 ),
               ),
             ),
-            SizedBox(
-              width: 180,
+            Expanded(
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   shape: RoundedRectangleBorder(
