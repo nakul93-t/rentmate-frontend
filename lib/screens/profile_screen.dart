@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:rentmate/screens/home_screen.dart';
+import 'package:rentmate/screens/login_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -120,7 +122,25 @@ class ProfileScreen extends StatelessWidget {
                         'Log Out',
                         style: TextStyle(fontSize: 18),
                       ),
-                      onTap: () {},
+                      onTap: () async {
+                        try {
+                          final prefs = await SharedPreferences.getInstance();
+                          prefs.clear();
+                          Navigator.of(context).pushAndRemoveUntil(
+                            MaterialPageRoute(
+                              builder: (context) {
+                                return LoginScreen();
+                              },
+                            ),
+                            (route) => true,
+                          );
+                        } on Exception catch (e) {
+                          print(e);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Unaable to logn')),
+                          );
+                        }
+                      },
                     ),
                     Divider(),
                   ],

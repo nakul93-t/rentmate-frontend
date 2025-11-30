@@ -1,0 +1,38 @@
+HOME PAGE
+__________
+1.in the home page we have a SEARCH bar where we can search for anything beside it we have a notification bar and also a current location card which shows our location details you can 
+change it
+2.down that we have a category of different things for example cars an if we click it will only show categories of cars only
+3.next we have recommendation bar which will show a recommendations of things we recently searched or according to your recent favorites including with information about the thing price ,name ,description and a like button
+
+messages
+_________
+Chats:
+1.in the message page we have search bar to search for people and all chats 
+2.it includes name profile message time and read or unread details
+
+my adds
+_______
+1.this page will show us our products which we published for people to see and order it has like button, how many people have seen it and mark as sold button ,republish button, and an expiry detail from there the seller can get every details
+
+profile
+_______
+1.in the profile you can edit your personal information change profile and also include
+a .orders 
+b .favorites
+c .help center 
+e .brokers 
+2.in another card we includes 
+a .personal info
+b .orders
+c .payment details
+d .location
+e .my adds
+f .languages
+g .privacy and terms
+h .about
+I .logout 
+ 
+uploader
+________
+1.uploader is used for uploading the details of items and pictures that the seller need to sell. 

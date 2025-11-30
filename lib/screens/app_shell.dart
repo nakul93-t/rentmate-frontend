@@ -1,121 +1,125 @@
 import 'package:flutter/material.dart';
-import 'package:rentmate/screens/chat_screen.dart';
+import 'package:rentmate/screens/chats/chat_list_screen.dart';
+import 'package:rentmate/screens/create_ad_screen.dart';
 import 'package:rentmate/screens/home_screen.dart';
 import 'package:rentmate/screens/profile_screen.dart';
 import 'package:rentmate/screens/Myadds_screen.dart';
 
 class AppShell extends StatefulWidget {
-  const AppShell({super.key});
+  final String currentUserId; // Pass user ID from login/auth
+
+  const AppShell({
+    super.key,
+    required this.currentUserId,
+  });
 
   @override
   State<AppShell> createState() => _AppShellState();
 }
 
-List<Widget> pages = [
-  HomeScreen(),
-  ChatScreen(),
-  MyAddsListPage(),
-  ProfileScreen(),
-];
-
-List<BottomNavigationBarItem> bottomNavigationBarItems = [
-  BottomNavigationBarItem(
-    icon: Icon(
-      Icons.home,
-    ),
-    label: 'Home',
-    activeIcon: Icon(
-      Icons.home_outlined,
-      color: const Color.fromARGB(255, 19, 19, 18),
-    ),
-  ),
-  BottomNavigationBarItem(
-    icon: Icon(Icons.chat),
-    label: 'Messages',
-    activeIcon: Icon(
-      Icons.chat_outlined,
-      color: const Color.fromARGB(255, 19, 19, 18),
-    ),
-  ),
-  BottomNavigationBarItem(
-    icon: Icon(Icons.ads_click),
-    label: 'Ads',
-    activeIcon: Icon(
-      Icons.ads_click,
-      color: const Color.fromARGB(255, 19, 19, 18),
-    ),
-  ),
-  BottomNavigationBarItem(
-    icon: Icon(Icons.person),
-    label: 'Account',
-    activeIcon: Icon(
-      Icons.person_outline,
-      color: const Color.fromARGB(255, 19, 19, 18),
-    ),
-  ),
-];
-
 class _AppShellState extends State<AppShell> {
   int _selectedIndex = 0;
 
+  // Build pages dynamically with required parameters
+  List<Widget> _getPages() {
+    return [
+      HomeScreen(),
+      ChatListScreen(currentUserId: widget.currentUserId), // Pass userId here
+      CreateAdScreen(
+        currentUserId: widget.currentUserId,
+      ),
+      MyAddsListPage(
+        currentUserId: widget.currentUserId,
+      ),
+      ProfileScreen(),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: pages[_selectedIndex],
+    final pages = _getPages();
 
+    return Scaffold(
+      body: IndexedStack(
+        index: _selectedIndex,
+        children: pages, // This keeps state of all pages
+      ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
           setState(() {
-            _selectedIndex = 2; // Ads page (middle)
+            _selectedIndex = 2; // Navigate to Create Ad
           });
         },
-        child: Icon(Icons.add),
+        backgroundColor: Colors.blue,
+        child: Icon(Icons.add, color: Colors.white),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-
       bottomNavigationBar: BottomAppBar(
         shape: CircularNotchedRectangle(),
         notchMargin: 8,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            IconButton(
-              icon: Icon(
-                Icons.home,
-                color: _selectedIndex == 0 ? Colors.blue : Colors.grey,
+        elevation: 8,
+        child: Container(
+          height: 60,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildNavItem(
+                icon: Icons.home_outlined,
+                label: 'Home',
+                index: 0,
               ),
-              onPressed: () => setState(() => _selectedIndex = 0),
-            ),
-
-            IconButton(
-              icon: Icon(
-                Icons.chat,
-                color: _selectedIndex == 1 ? Colors.blue : Colors.grey,
+              _buildNavItem(
+                icon: Icons.chat_bubble_outline,
+                label: 'Chats',
+                index: 1,
               ),
-              onPressed: () => setState(() => _selectedIndex = 1),
-            ),
-
-            SizedBox(width: 40), // space for FAB
-
-            IconButton(
-              icon: Icon(
-                Icons.ads_click,
-                color: _selectedIndex == 2 ? Colors.blue : Colors.grey,
+              SizedBox(width: 40), // Space for FAB
+              _buildNavItem(
+                icon: Icons.receipt_long_outlined,
+                label: 'My Ads',
+                index: 3,
               ),
-              onPressed: () => setState(() => _selectedIndex = 2),
-            ),
-
-            IconButton(
-              icon: Icon(
-                Icons.person,
-                color: _selectedIndex == 3 ? Colors.blue : Colors.grey,
+              _buildNavItem(
+                icon: Icons.person_outline,
+                label: 'Profile',
+                index: 4,
               ),
-              onPressed: () => setState(() => _selectedIndex = 3),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
-    ;
+  }
+
+  Widget _buildNavItem({
+    required IconData icon,
+    required String label,
+    required int index,
+  }) {
+    final isSelected = _selectedIndex == index;
+
+    return InkWell(
+      onTap: () => setState(() => _selectedIndex = index),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            icon,
+            color: isSelected ? Colors.blue : Colors.grey,
+            size: 24,
+          ),
+          SizedBox(height: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              color: isSelected ? Colors.blue : Colors.grey,
+              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
