@@ -197,7 +197,7 @@ class _LoginScreenState extends State<LoginScreen> {
         body: body,
       );
 
-      if (response.statusCode == 200) {
+      if (response.statusCode == 200){
         final parsedBody = jsonDecode(response.body);
 
         final token = parsedBody['data']['token'];
@@ -222,7 +222,7 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
           (r) => false,
         );
-      } else {
+      }else{
         final error = jsonDecode(response.body);
         _showError(error['message'] ?? "Login failed");
       }

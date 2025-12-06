@@ -224,7 +224,7 @@ class SignupScreenState extends State<SignupScreen> {
       "name": name,
       "email": email,
       "password": password,
-      "role": "customer",
+      "role": "user",
     });
 
     try {
