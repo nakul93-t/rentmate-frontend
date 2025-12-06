@@ -38,13 +38,14 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
   List<dynamic> categories = [];
   List<dynamic> subCategories = [];
   List<dynamic> allSubCategories = [];
-  List<File> selectedImages = [];
+  List<ImageData> imagesList = []; // Changed to store both File and URL
   List<VariantInput> variants = [];
 
   bool isLoading = false;
   bool isLoadingCategories = true;
+  bool isUploadingImage = false;
 
-  final String baseUrl = kBaseUrl;
+  final String baseUrl = kIpAddress;
 
   @override
   void initState() {
@@ -65,18 +66,25 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
 
   Future<void> _loadCategories() async {
     try {
+      print("===== LOADING CATEGORIES =====");
+      print("URL: $baseUrl/api/category");
       final response = await http.get(
-        Uri.parse('$baseUrl/api/category'),
+        Uri.parse('$baseUrl/api/category/fetch-all'),
       );
+      print("Status Code: ${response.statusCode}");
+      print("Response Body: ${response.body}"); // ← This shows the actual data
+      print("Response Type: ${response.body.runtimeType}");
 
       final subCatResponse = await http.get(
-        Uri.parse('$baseUrl/api/sub-category'),
+        Uri.parse('$baseUrl/api/sub-category/fetch-all'),
       );
 
       if (response.statusCode == 200 && subCatResponse.statusCode == 200) {
+        print("===== CATEGORIES =====");
+        print("Response Type: ${json.decode(response.body)}");
         setState(() {
-          categories = json.decode(response.body);
-          allSubCategories = json.decode(subCatResponse.body);
+          categories = json.decode(response.body)["data"];
+          allSubCategories = json.decode(subCatResponse.body)["data"];
           isLoadingCategories = false;
         });
       }
@@ -102,25 +110,107 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
     });
   }
 
-  Future<void> _pickImages() async {
-    try {
-      final List<XFile> images = await _picker.pickMultiImage();
+  Future<void> _pickAndUploadImage() async {
+    if (imagesList.length >= 4) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Maximum 4 images allowed')),
+      );
+      return;
+    }
 
-      if (images.isNotEmpty) {
-        setState(() {
-          // Limit to 4 images
-          selectedImages = images
-              .take(4)
-              .map((xFile) => File(xFile.path))
-              .toList();
-        });
+    try {
+      final XFile? image = await _picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1920,
+        maxHeight: 1080,
+        imageQuality: 85,
+      );
+
+      if (image != null) {
+        setState(() => isUploadingImage = true);
+
+        // Upload image immediately
+        String? imageUrl = await _uploadSingleImage(File(image.path));
+
+        if (imageUrl != null) {
+          setState(() {
+            imagesList.add(
+              ImageData(
+                file: File(image.path),
+                url: imageUrl,
+              ),
+            );
+            isUploadingImage = false;
+          });
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Image uploaded successfully!'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 1),
+            ),
+          );
+        } else {
+          setState(() => isUploadingImage = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to upload image'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     } catch (e) {
-      print('Error picking images: $e');
+      print('Error picking/uploading image: $e');
+      setState(() => isUploadingImage = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to pick images')),
+        SnackBar(content: Text('Failed to upload image')),
       );
     }
+  }
+
+  Future<String?> _uploadSingleImage(File imageFile) async {
+    try {
+      var request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$baseUrl/api/upload'),
+      );
+
+      // Add the image file
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          'image',
+          imageFile.path,
+        ),
+      );
+
+      print('Uploading image...');
+      var streamedResponse = await request.send();
+      var response = await http.Response.fromStream(streamedResponse);
+
+      print('Upload response status: ${response.statusCode}');
+      print('Upload response body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final jsonData = json.decode(response.body);
+        return jsonData['url'];
+      } else {
+        print('Upload failed: ${response.body}');
+        return null;
+      }
+    } catch (e) {
+      print('Error uploading image: $e');
+      return null;
+    }
+  }
+
+  void _removeImage(int index) {
+    setState(() {
+      imagesList.removeAt(index);
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Image removed')),
+    );
   }
 
   void _addVariant() {
@@ -147,9 +237,19 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
       return;
     }
 
+    if (imagesList.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Please add at least one image')),
+      );
+      return;
+    }
+
     setState(() => isLoading = true);
 
     try {
+      // Get all uploaded image URLs
+      List<String> imageUrls = imagesList.map((img) => img.url).toList();
+
       // Prepare variants data
       List<Map<String, dynamic>> variantsData = variants
           .where((v) => v.label.isNotEmpty)
@@ -179,15 +279,19 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
         'variants': variantsData,
         'isActive': true,
         'createdBy': widget.currentUserId,
-        // TODO: Upload images to server/cloud storage
-        'images': [], // For now, empty. You'll need image upload
+        'images': imageUrls, // All images already uploaded!
       };
+
+      print('Submitting ad: $itemData');
 
       final response = await http.post(
         Uri.parse('$baseUrl/api/item/create'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode(itemData),
       );
+
+      print('Response status: ${response.statusCode}');
+      print('Response body: ${response.body}');
 
       if (response.statusCode == 201 || response.statusCode == 200) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -204,19 +308,19 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
         _descriptionController.clear();
         _depositController.clear();
         setState(() {
-          selectedImages.clear();
+          imagesList.clear();
           variants = [VariantInput()];
           selectedCategoryId = null;
           selectedSubCategoryId = null;
         });
       } else {
-        throw Exception('Failed to create ad');
+        throw Exception('Failed to create ad: ${response.body}');
       }
     } catch (e) {
       print('Error creating ad: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to post ad'),
+          content: Text('Failed to post ad: $e'),
           backgroundColor: Colors.red,
         ),
       );
@@ -239,11 +343,13 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
         title: Text('Post Ad'),
         actions: [
           TextButton(
-            onPressed: isLoading ? null : _submitAd,
+            onPressed: isLoading || isUploadingImage ? null : _submitAd,
             child: Text(
               'POST',
               style: TextStyle(
-                color: Colors.white,
+                color: isLoading || isUploadingImage
+                    ? Colors.grey
+                    : Colors.white,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -259,7 +365,7 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
             children: [
               // Images Section
               Text(
-                'Photos',
+                'Photos *',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
@@ -267,6 +373,24 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
               ),
               SizedBox(height: 8),
               _buildImagePicker(),
+              if (isUploadingImage)
+                Padding(
+                  padding: EdgeInsets.only(top: 8),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                      SizedBox(width: 8),
+                      Text(
+                        'Uploading image...',
+                        style: TextStyle(fontSize: 12, color: Colors.blue),
+                      ),
+                    ],
+                  ),
+                ),
               SizedBox(height: 24),
 
               // Item Name
@@ -464,7 +588,7 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton(
-                  onPressed: isLoading ? null : _submitAd,
+                  onPressed: isLoading || isUploadingImage ? null : _submitAd,
                   child: isLoading
                       ? CircularProgressIndicator(color: Colors.white)
                       : Text(
@@ -487,25 +611,35 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
         children: [
           // Add Image Button
           InkWell(
-            onTap: _pickImages,
+            onTap: isUploadingImage ? null : _pickAndUploadImage,
             child: Container(
               width: 100,
               height: 100,
               decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey),
+                border: Border.all(
+                  color: isUploadingImage ? Colors.grey : Colors.blue,
+                ),
                 borderRadius: BorderRadius.circular(8),
+                color: isUploadingImage ? Colors.grey[200] : null,
               ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.add_photo_alternate, size: 40, color: Colors.grey),
+                  Icon(
+                    Icons.add_photo_alternate,
+                    size: 40,
+                    color: isUploadingImage ? Colors.grey : Colors.blue,
+                  ),
                   SizedBox(height: 4),
                   Text(
-                    'Add Photos',
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                    isUploadingImage ? 'Uploading...' : 'Add Photo',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isUploadingImage ? Colors.grey : Colors.blue,
+                    ),
                   ),
                   Text(
-                    '(Max 4)',
+                    '(${imagesList.length}/4)',
                     style: TextStyle(fontSize: 10, color: Colors.grey),
                   ),
                 ],
@@ -514,53 +648,74 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
           ),
           SizedBox(width: 8),
 
-          // Selected Images
+          // Uploaded Images
           Expanded(
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: selectedImages.length,
-              itemBuilder: (context, index) {
-                return Container(
-                  margin: EdgeInsets.only(right: 8),
-                  child: Stack(
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.file(
-                          selectedImages[index],
-                          width: 100,
-                          height: 100,
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                      Positioned(
-                        top: 4,
-                        right: 4,
-                        child: InkWell(
-                          onTap: () {
-                            setState(() {
-                              selectedImages.removeAt(index);
-                            });
-                          },
-                          child: Container(
-                            padding: EdgeInsets.all(4),
-                            decoration: BoxDecoration(
-                              color: Colors.black54,
-                              shape: BoxShape.circle,
+            child: imagesList.isEmpty
+                ? Center(
+                    child: Text(
+                      'No images yet',
+                      style: TextStyle(color: Colors.grey, fontSize: 12),
+                    ),
+                  )
+                : ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: imagesList.length,
+                    itemBuilder: (context, index) {
+                      return Container(
+                        margin: EdgeInsets.only(right: 8),
+                        child: Stack(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Image.file(
+                                imagesList[index].file,
+                                width: 100,
+                                height: 100,
+                                fit: BoxFit.cover,
+                              ),
                             ),
-                            child: Icon(
-                              Icons.close,
-                              size: 16,
-                              color: Colors.white,
+                            // Success checkmark
+                            Positioned(
+                              top: 4,
+                              left: 4,
+                              child: Container(
+                                padding: EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  color: Colors.green,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  Icons.check,
+                                  size: 16,
+                                  color: Colors.white,
+                                ),
+                              ),
                             ),
-                          ),
+                            // Delete button
+                            Positioned(
+                              top: 4,
+                              right: 4,
+                              child: InkWell(
+                                onTap: () => _removeImage(index),
+                                child: Container(
+                                  padding: EdgeInsets.all(4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black54,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    Icons.close,
+                                    size: 16,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-                    ],
+                      );
+                    },
                   ),
-                );
-              },
-            ),
           ),
         ],
       ),
@@ -658,6 +813,17 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
       ),
     );
   }
+}
+
+// Helper class for storing image data
+class ImageData {
+  final File file;
+  final String url;
+
+  ImageData({
+    required this.file,
+    required this.url,
+  });
 }
 
 // Helper class for variant input
