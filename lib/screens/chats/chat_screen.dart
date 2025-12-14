@@ -1,17 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:rentmate/services/socket_service.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'dart:async';
+import 'package:rentmate/constants.dart';
 
 class ChatScreen extends StatefulWidget {
   final String requestId;
   final String currentUserId;
   final String otherUserName;
   final String itemName;
+  final String? chatId; // Optional
 
   const ChatScreen({
     required this.requestId,
     required this.currentUserId,
     required this.otherUserName,
     required this.itemName,
+    this.chatId,
     Key? key,
   }) : super(key: key);
 
@@ -28,56 +34,240 @@ class _ChatScreenState extends State<ChatScreen> {
   List<Message> messages = [];
   bool isLoading = true;
   bool isSending = false;
+  String? errorMessage;
+  bool hasConnectionError = false;
+  StreamSubscription? _connectionSubscription;
+  bool isSelfChat = false;
+  String? _currentChatId;
 
   @override
   void initState() {
     super.initState();
+    _currentChatId = widget.chatId;
+    _checkRequestDetails();
     _initializeChat();
+    if (_currentChatId == null) {
+      _fetchChatId();
+    }
+  }
+
+  Future<void> _fetchChatId() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$kBaseUrl/chat/request/${widget.requestId}'),
+      );
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (mounted) {
+          setState(() {
+            _currentChatId = data['_id'];
+          });
+        }
+      }
+    } catch (e) {
+      print('Error fetching chatId: $e');
+    }
+  }
+
+  Future<void> _deleteChat() async {
+    if (_currentChatId == null) return;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Delete Chat'),
+        content: Text('Are you sure you want to delete this chat history?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      final response = await http.delete(
+        Uri.parse('$kBaseUrl/chat/$_currentChatId'),
+      );
+
+      if (response.statusCode == 200) {
+        if (!mounted) return;
+        Navigator.pop(context);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to delete chat')),
+        );
+      }
+    } catch (e) {
+      print('Error deleting chat: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error deleting chat')),
+      );
+    }
+  }
+
+  Future<void> _deleteMessage(String messageId) async {
+    if (_currentChatId == null) return;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Delete Message'),
+        content: Text('Are you sure you want to delete this message?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      final response = await http.delete(
+        Uri.parse('$kBaseUrl/chat/$_currentChatId/messages/$messageId'),
+      );
+
+      if (response.statusCode == 200) {
+        setState(() {
+          messages.removeWhere((m) => m.messageId == messageId);
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Message deleted')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to delete message')),
+        );
+      }
+    } catch (e) {
+      print('Error deleting message: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error deleting message')),
+      );
+    }
+  }
+
+  // ... existing code ...
+
+  Future<void> _checkRequestDetails() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$kBaseUrl/rent-request/${widget.requestId}'),
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final customerId = data['customerId'] is Map
+            ? data['customerId']['_id']
+            : data['customerId'];
+        final renterId = data['renterId'] is Map
+            ? data['renterId']['_id']
+            : data['renterId'];
+
+        // If the backend allows it (e.g. legacy data) or if someone bypassed checks,
+        // we might find that customerId == renterId, OR we are chatting with ourselves
+        // if both participants are the same user (unlikely unless self-rent),
+        // OR simply if we want to flag it.
+        // The most direct "self chat" check is:
+        if (customerId.toString() == renterId.toString()) {
+          setState(() => isSelfChat = true);
+        }
+      }
+    } catch (e) {
+      print('Error fetching request details: $e');
+    }
   }
 
   void _initializeChat() {
+    print('🔷 [ChatScreen] Initializing chat for request: ${widget.requestId}');
+
     // Connect to socket
     _socketService.connect();
 
-    // Join the chat room
-    _socketService.joinChat(widget.requestId);
-
-    // Listen for chat history
-    _socketService.onChatHistory((data) {
+    // Listen to connection status events
+    _connectionSubscription = _socketService.connectionStatus.listen((
+      isConnected,
+    ) {
       if (!mounted) return;
 
-      setState(() {
+      if (isConnected) {
+        setState(() {
+          hasConnectionError = false;
+          errorMessage = null;
+        });
+        _socketService.joinChat(widget.requestId);
+      } else {
+        setState(() {
+          hasConnectionError = true;
+          errorMessage = 'Disconnected from server';
+        });
+      }
+    });
+
+    if (_socketService.isConnected) {
+      _socketService.joinChat(widget.requestId);
+    }
+
+    _socketService.onChatHistory((data) {
+      if (!mounted) return;
+      try {
+        List<Message> parsedMessages = [];
         if (data != null && data is List) {
-          messages = data
+          parsedMessages = data
               .map((msg) => Message.fromJson(msg as Map<String, dynamic>))
               .toList();
         }
-        isLoading = false;
-      });
-      _scrollToBottom();
-    });
-
-    // Listen for new messages
-    _socketService.onReceiveMessage((data) {
-      if (!mounted) return;
-
-      setState(() {
-        messages.add(Message.fromJson(data as Map<String, dynamic>));
-        isSending = false;
-      });
-      _scrollToBottom();
-    });
-
-    // Set loading to false after 3 seconds if no response
-    Future.delayed(Duration(seconds: 3), () {
-      if (mounted && isLoading) {
+        setState(() {
+          messages = parsedMessages;
+          isLoading = false;
+        });
+        _scrollToBottom();
+      } catch (e) {
+        print('❌ [ChatScreen] Error processing chat history: $e');
         setState(() => isLoading = false);
       }
+    });
+
+    _socketService.onReceiveMessage((data) {
+      if (!mounted) return;
+      try {
+        final newMessage = Message.fromJson(data as Map<String, dynamic>);
+        setState(() {
+          messages.add(newMessage);
+          isSending = false;
+        });
+        _scrollToBottom();
+      } catch (e) {
+        print('❌ [ChatScreen] Error parsing new message: $e');
+      }
+    });
+
+    _socketService.onSocketError((error) {
+      if (!mounted) return;
+      setState(() {
+        errorMessage = 'Socket error: ${error.toString()}';
+        hasConnectionError = true;
+      });
     });
   }
 
   @override
   void dispose() {
+    _connectionSubscription?.cancel();
     _socketService.leaveChat(widget.requestId);
     _messageController.dispose();
     _scrollController.dispose();
@@ -100,58 +290,122 @@ class _ChatScreenState extends State<ChatScreen> {
   void _sendMessage() {
     if (_messageController.text.trim().isEmpty || isSending) return;
 
-    final messageText = _messageController.text.trim();
+    if (!_socketService.isConnected) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Not connected. Retrying...')),
+      );
+      _retryConnection();
+      return;
+    }
 
-    setState(() {
-      isSending = true;
-    });
+    setState(() => isSending = true);
 
     _socketService.sendMessage(
       widget.requestId,
       widget.currentUserId,
-      messageText,
+      _messageController.text.trim(),
     );
 
     _messageController.clear();
-    _focusNode.requestFocus(); // Keep keyboard open
+    _focusNode.requestFocus();
+  }
+
+  void _retryConnection() {
+    setState(() {
+      isLoading = true;
+      hasConnectionError = false;
+      errorMessage = null;
+    });
+    _socketService.reconnect();
+    _initializeChat();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.grey[100],
       appBar: AppBar(
-        backgroundColor: Colors.blue,
-        foregroundColor: Colors.white,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        elevation: 1,
+        title: Row(
           children: [
-            Text(
-              widget.otherUserName,
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            CircleAvatar(
+              backgroundColor: Colors.blue[100],
+              radius: 18,
+              child: Text(
+                widget.otherUserName.isNotEmpty
+                    ? widget.otherUserName[0].toUpperCase()
+                    : '?',
+                style: TextStyle(color: Colors.blue[800], fontSize: 14),
+              ),
             ),
-            Text(
-              'About: ${widget.itemName}',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.normal),
+            SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.otherUserName,
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  Text(
+                    widget.itemName,
+                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
             ),
           ],
         ),
         actions: [
-          IconButton(
-            icon: Icon(Icons.info_outline),
-            onPressed: () {
-              _showItemDetails();
-            },
+          // if (_currentChatId != null)
+          //   IconButton(
+          //     icon: Icon(Icons.delete_outline, color: Colors.red),
+          //     onPressed: _deleteChat,
+          //   ),
+          Container(
+            margin: EdgeInsets.symmetric(horizontal: 16),
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: _socketService.isConnected ? Colors.green : Colors.red,
+            ),
           ),
         ],
       ),
       body: Column(
         children: [
-          // Messages List
-          Expanded(
-            child: _buildMessagesList(),
-          ),
-
-          // Input Field
+          if (isSelfChat)
+            Container(
+              width: double.infinity,
+              padding: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+              color: Colors.amber[100],
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, size: 20, color: Colors.amber[900]),
+                  SizedBox(width: 8),
+                  Text(
+                    'You are verifying the chat feature (Self-Chat)',
+                    style: TextStyle(color: Colors.amber[900], fontSize: 13),
+                  ),
+                ],
+              ),
+            ),
+          if (hasConnectionError && errorMessage != null)
+            Container(
+              width: double.infinity,
+              padding: EdgeInsets.all(8),
+              color: Colors.red[100],
+              child: Text(
+                errorMessage!,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.red[900]),
+              ),
+            ),
+          Expanded(child: _buildMessagesList()),
           _buildInputField(),
         ],
       ),
@@ -160,16 +414,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _buildMessagesList() {
     if (isLoading) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('Loading messages...'),
-          ],
-        ),
-      );
+      return Center(child: CircularProgressIndicator());
     }
 
     if (messages.isEmpty) {
@@ -177,17 +422,9 @@ class _ChatScreenState extends State<ChatScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.chat_bubble_outline, size: 64, color: Colors.grey),
+            Icon(Icons.chat_bubble_outline, size: 64, color: Colors.grey[300]),
             SizedBox(height: 16),
-            Text(
-              'No messages yet',
-              style: TextStyle(fontSize: 18, color: Colors.grey),
-            ),
-            SizedBox(height: 8),
-            Text(
-              'Start the conversation!',
-              style: TextStyle(fontSize: 14, color: Colors.grey),
-            ),
+            Text('No messages yet', style: TextStyle(color: Colors.grey)),
           ],
         ),
       );
@@ -195,111 +432,107 @@ class _ChatScreenState extends State<ChatScreen> {
 
     return ListView.builder(
       controller: _scrollController,
-      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       itemCount: messages.length,
       itemBuilder: (context, index) {
         final message = messages[index];
         final isMe = message.senderId == widget.currentUserId;
-        final showDate = _shouldShowDate(index);
 
-        return Column(
-          children: [
-            if (showDate) _buildDateDivider(message.timestamp),
-            _buildMessageBubble(message, isMe),
-          ],
+        // Show date if needed
+        bool showDate = false;
+        if (index == 0) {
+          showDate = true;
+        } else {
+          final prevDate = messages[index - 1].timestamp;
+          final currDate = message.timestamp;
+          if (prevDate.day != currDate.day ||
+              prevDate.month != currDate.month ||
+              prevDate.year != currDate.year) {
+            showDate = true;
+          }
+        }
+
+        return GestureDetector(
+          onLongPress: () {
+            if (isMe) {
+              _deleteMessage(message.messageId);
+            }
+          },
+          child: Column(
+            children: [
+              if (showDate) _buildDateDivider(message.timestamp),
+              Align(
+                alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+                child: Container(
+                  margin: EdgeInsets.only(
+                    bottom: 8,
+                    left: isMe ? 50 : 0,
+                    right: isMe ? 0 : 50,
+                  ),
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: isMe ? Colors.black : Colors.white,
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(20),
+                      topRight: Radius.circular(20),
+                      bottomLeft: isMe
+                          ? Radius.circular(20)
+                          : Radius.circular(4),
+                      bottomRight: isMe
+                          ? Radius.circular(4)
+                          : Radius.circular(20),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 5,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        message.text,
+                        style: TextStyle(
+                          color: isMe ? Colors.white : Colors.black87,
+                          fontSize: 15,
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        _formatTime(message.timestamp),
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: isMe ? Colors.white54 : Colors.grey[500],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         );
       },
     );
   }
 
-  bool _shouldShowDate(int index) {
-    if (index == 0) return true;
-
-    final currentMsg = messages[index];
-    final previousMsg = messages[index - 1];
-
-    return currentMsg.timestamp.day != previousMsg.timestamp.day ||
-        currentMsg.timestamp.month != previousMsg.timestamp.month ||
-        currentMsg.timestamp.year != previousMsg.timestamp.year;
-  }
-
   Widget _buildDateDivider(DateTime date) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final yesterday = today.subtract(Duration(days: 1));
-    final messageDate = DateTime(date.year, date.month, date.day);
-
-    String dateText;
-    if (messageDate == today) {
-      dateText = 'Today';
-    } else if (messageDate == yesterday) {
-      dateText = 'Yesterday';
-    } else {
-      dateText = '${date.day}/${date.month}/${date.year}';
-    }
-
-    return Container(
-      margin: EdgeInsets.symmetric(vertical: 16),
-      child: Row(
-        children: [
-          Expanded(child: Divider()),
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16),
-            child: Text(
-              dateText,
-              style: TextStyle(
-                color: Colors.grey,
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 16),
+      child: Center(
+        child: Container(
+          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          decoration: BoxDecoration(
+            color: Colors.grey[200],
+            borderRadius: BorderRadius.circular(12),
           ),
-          Expanded(child: Divider()),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMessageBubble(Message message, bool isMe) {
-    return Align(
-      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: EdgeInsets.only(
-          bottom: 8,
-          left: isMe ? 64 : 0,
-          right: isMe ? 0 : 64,
-        ),
-        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        decoration: BoxDecoration(
-          color: isMe ? Colors.blue : Colors.grey[300],
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 4,
-              offset: Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              message.text,
-              style: TextStyle(
-                color: isMe ? Colors.white : Colors.black87,
-                fontSize: 15,
-              ),
-            ),
-            SizedBox(height: 4),
-            Text(
-              _formatTime(message.timestamp),
-              style: TextStyle(
-                fontSize: 10,
-                color: isMe ? Colors.white70 : Colors.black54,
-              ),
-            ),
-          ],
+          child: Text(
+            '${date.day}/${date.month}',
+            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+          ),
         ),
       ),
     );
@@ -307,14 +540,14 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _buildInputField() {
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         color: Colors.white,
         boxShadow: [
           BoxShadow(
             offset: Offset(0, -2),
-            blurRadius: 4,
-            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            color: Colors.black.withOpacity(0.05),
           ),
         ],
       ),
@@ -330,7 +563,6 @@ class _ChatScreenState extends State<ChatScreen> {
                 child: TextField(
                   controller: _messageController,
                   focusNode: _focusNode,
-                  textCapitalization: TextCapitalization.sentences,
                   decoration: InputDecoration(
                     hintText: 'Type a message...',
                     border: InputBorder.none,
@@ -339,30 +571,29 @@ class _ChatScreenState extends State<ChatScreen> {
                       vertical: 10,
                     ),
                   ),
-                  maxLines: null,
-                  textInputAction: TextInputAction.send,
+                  textCapitalization: TextCapitalization.sentences,
                   onSubmitted: (_) => _sendMessage(),
                 ),
               ),
             ),
-            SizedBox(width: 8),
+            SizedBox(width: 12),
             Container(
               decoration: BoxDecoration(
-                color: Colors.blue,
+                color: Colors.black,
                 shape: BoxShape.circle,
               ),
               child: IconButton(
                 icon: isSending
                     ? SizedBox(
-                        width: 20,
-                        height: 20,
+                        width: 16,
+                        height: 16,
                         child: CircularProgressIndicator(
                           color: Colors.white,
                           strokeWidth: 2,
                         ),
                       )
                     : Icon(Icons.send, color: Colors.white, size: 20),
-                onPressed: isSending ? null : _sendMessage,
+                onPressed: _sendMessage,
               ),
             ),
           ],
@@ -371,127 +602,32 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  void _showItemDetails() {
-    showModalBottomSheet(
-      context: context,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) {
-        return Container(
-          padding: EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[300],
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              SizedBox(height: 24),
-              Text(
-                'Chat Details',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              SizedBox(height: 16),
-              _buildDetailRow(Icons.shopping_bag, 'Item', widget.itemName),
-              _buildDetailRow(Icons.person, 'With', widget.otherUserName),
-              _buildDetailRow(
-                Icons.chat,
-                'Messages',
-                '${messages.length} messages',
-              ),
-              SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: Text('Close'),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildDetailRow(IconData icon, String label, String value) {
-    return Padding(
-      padding: EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        children: [
-          Icon(icon, size: 20, color: Colors.blue),
-          SizedBox(width: 12),
-          Text(
-            '$label: ',
-            style: TextStyle(
-              fontWeight: FontWeight.w600,
-              color: Colors.grey[600],
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: TextStyle(fontWeight: FontWeight.w500),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   String _formatTime(DateTime time) {
-    final hour = time.hour.toString().padLeft(2, '0');
-    final minute = time.minute.toString().padLeft(2, '0');
-    return '$hour:$minute';
+    return '${time.hour}:${time.minute.toString().padLeft(2, '0')}';
   }
 }
 
-// Message Model
 class Message {
-  final String id;
+  final String messageId;
   final String senderId;
   final String text;
   final DateTime timestamp;
-  final bool isRead;
 
   Message({
-    required this.id,
+    this.messageId = '',
     required this.senderId,
     required this.text,
     required this.timestamp,
-    this.isRead = false,
   });
 
   factory Message.fromJson(Map<String, dynamic> json) {
     return Message(
-      id: json['_id'] ?? '',
-      senderId: json['senderId'] is Map
-          ? json['senderId']['_id']
-          : json['senderId'],
+      messageId: json['_id'] ?? '',
+      senderId: json['senderId'] ?? '',
       text: json['text'] ?? '',
-      timestamp: DateTime.parse(json['timestamp']),
-      isRead: json['isRead'] ?? false,
+      timestamp: DateTime.parse(
+        json['timestamp'] ?? DateTime.now().toIso8601String(),
+      ),
     );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      '_id': id,
-      'senderId': senderId,
-      'text': text,
-      'timestamp': timestamp.toIso8601String(),
-      'isRead': isRead,
-    };
   }
 }

@@ -17,7 +17,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Flutter Demo',
       theme: ThemeData(
-        textTheme: GoogleFonts.josefinSansTextTheme(),
+        textTheme: GoogleFonts.nunitoSansTextTheme(),
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blueAccent),
       ),
       home: AuthWrapper(),

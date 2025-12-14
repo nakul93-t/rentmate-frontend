@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:rentmate/screens/chats/chat_list_screen.dart';
 import 'package:rentmate/screens/create_ad_screen.dart';
-import 'package:rentmate/screens/home_screen.dart';
+import 'package:rentmate/screens/home/home_screen.dart';
 import 'package:rentmate/screens/profile_screen.dart';
 import 'package:rentmate/screens/Myadds_screen.dart';
 

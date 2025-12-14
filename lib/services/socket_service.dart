@@ -1,5 +1,6 @@
 import 'package:rentmate/constants.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
+import 'dart:async';
 
 class SocketService {
   // Singleton pattern
@@ -17,66 +18,120 @@ class SocketService {
 
   bool get isConnected => _isConnected;
 
+  // Connection status stream
+  final _connectionStatusController = StreamController<bool>.broadcast();
+  Stream<bool> get connectionStatus => _connectionStatusController.stream;
+
   void connect() {
+    print('🔷 [SocketService] ========== CONNECT ATTEMPT ==========');
+    print('🔷 [SocketService] Server URL: $serverUrl');
+    print(
+      '🔷 [SocketService] Current state - socket exists: ${socket != null}, connected: $_isConnected',
+    );
+
     if (socket != null && _isConnected) {
-      print('Socket already connected');
+      print('🔷 [SocketService] Already connected, skipping');
       return;
     }
 
+    // If socket exists but not connected, dispose and recreate
+    if (socket != null && !_isConnected) {
+      print('🔷 [SocketService] Disposing stale socket...');
+      socket!.dispose();
+      socket = null;
+    }
+
     try {
+      print('🔷 [SocketService] Using transports: [polling, websocket]');
+      print('🔷 [SocketService] socket_io_client version: 3.x/4.x (EIO=4)');
+
+      // Configuration for socket_io_client v3+
       socket = IO.io(
         serverUrl,
-        IO.OptionBuilder()
-            .setTransports(['websocket']) // Use WebSocket only
-            .disableAutoConnect() // Manual connection
-            .setTimeout(5000) // Connection timeout
-            .setReconnectionDelay(1000) // Reconnect after 1 second
-            .setReconnectionAttempts(5) // Try 5 times
-            .build(),
+        <String, dynamic>{
+          'transports': ['websocket'], // FORCE websocket only
+          'autoConnect': false,
+          'forceNew': true,
+          'reconnection': true,
+          'reconnectionAttempts': 100,
+          'reconnectionDelay': 1000,
+        },
       );
 
+      print('🔷 [SocketService] Socket created with simplified config');
+      print('🔷 [SocketService] Options: ${socket?.io.options}');
+      print('🔷 [SocketService] Initiating connection...');
       socket!.connect();
 
       // Connection events
       socket!.onConnect((_) {
         _isConnected = true;
-        print('✅ Connected to socket server');
+        _connectionStatusController.add(true);
+        print('✅ [SocketService] ========== CONNECTED ==========');
+        print('✅ [SocketService] Socket ID: ${socket!.id}');
+        print('✅ [SocketService] Connected to: $serverUrl');
       });
 
       socket!.onConnectError((error) {
         _isConnected = false;
-        print('❌ Connection error: $error');
+        _connectionStatusController.add(false);
+        print('❌ [SocketService] ========== CONNECTION ERROR ==========');
+        print('❌ [SocketService] Error: $error');
+        print('❌ [SocketService] Error type: ${error.runtimeType}');
       });
 
-      socket!.onConnectTimeout((data) {
-        _isConnected = false;
-        print('⏱️ Connection timeout');
-      });
+      // Timeout event deprecated in v3/v4 of some clients, relies on connect_error
 
-      socket!.onDisconnect((_) {
+      socket!.onDisconnect((reason) {
         _isConnected = false;
-        print('🔌 Disconnected from socket server');
+        _connectionStatusController.add(false);
+        print('🔌 [SocketService] ========== DISCONNECTED ==========');
+        print('🔌 [SocketService] Reason: $reason');
       });
 
       socket!.onReconnect((data) {
         _isConnected = true;
-        print('🔄 Reconnected to socket server');
+        print('🔄 [SocketService] ========== RECONNECTED ==========');
+        print('🔄 [SocketService] Attempt: $data');
+      });
+
+      socket!.onReconnectAttempt((attempt) {
+        print('🔄 [SocketService] Reconnection attempt: $attempt');
       });
 
       socket!.onReconnectError((error) {
-        print('❌ Reconnection error: $error');
+        print('❌ [SocketService] Reconnection error: $error');
       });
 
       socket!.onReconnectFailed((_) {
         _isConnected = false;
-        print('❌ Reconnection failed');
+        _connectionStatusController.add(false);
+        print('❌ [SocketService] ========== RECONNECTION FAILED ==========');
+        print('❌ [SocketService] All reconnection attempts exhausted');
       });
 
       socket!.onError((error) {
-        print('❌ Socket error: $error');
+        print('❌ [SocketService] Socket error: $error');
       });
-    } catch (e) {
-      print('❌ Error initializing socket: $e');
+
+      socket!.onPing((_) {
+        print('📡 [SocketService] Ping sent');
+      });
+
+      socket!.onPong((_) {
+        print('📡 [SocketService] Pong received');
+      });
+
+      // Add ANY event listener to see all events
+      socket!.onAny((event, data) {
+        print('🔔 [SocketService] Event received: $event');
+        print('🔔 [SocketService] Data: $data');
+      });
+
+      print('🔷 [SocketService] All event listeners attached');
+    } catch (e, stackTrace) {
+      print('❌ [SocketService] Exception during connection: $e');
+      print('❌ [SocketService] Stack trace: $stackTrace');
     }
   }
 
@@ -85,7 +140,9 @@ class SocketService {
       socket!.disconnect();
       socket!.dispose();
       socket = null;
+      socket = null;
       _isConnected = false;
+      _connectionStatusController.add(false);
       print('Socket disconnected and disposed');
     }
   }

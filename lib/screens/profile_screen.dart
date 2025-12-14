@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:rentmate/screens/home_screen.dart';
+import 'package:rentmate/screens/home/home_screen.dart';
 import 'package:rentmate/screens/login_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -137,7 +137,7 @@ class ProfileScreen extends StatelessWidget {
                         } on Exception catch (e) {
                           print(e);
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Unaable to logn')),
+                            SnackBar(content: Text('Unable to logn')),
                           );
                         }
                       },

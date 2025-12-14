@@ -24,7 +24,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[300],
+      backgroundColor: const Color.fromARGB(255, 93, 238, 177),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(17),
@@ -38,8 +38,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
                   Center(
                     child: Image.asset(
-                      'assets/images/logo.png',
-                      width: 100,
+                      'assets/images/app logo.png',
+                      width: 180,
                     ),
                   ),
 
@@ -197,7 +197,7 @@ class _LoginScreenState extends State<LoginScreen> {
         body: body,
       );
 
-      if (response.statusCode == 200){
+      if (response.statusCode == 200) {
         final parsedBody = jsonDecode(response.body);
 
         final token = parsedBody['data']['token'];
@@ -222,7 +222,7 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
           (r) => false,
         );
-      }else{
+      } else {
         final error = jsonDecode(response.body);
         _showError(error['message'] ?? "Login failed");
       }

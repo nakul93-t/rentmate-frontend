@@ -3,6 +3,8 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 
 import 'package:rentmate/constants.dart';
+import 'package:rentmate/screens/chats/chat_screen.dart';
+import 'package:rentmate/item_details_screen.dart';
 
 class MyAddsListPage extends StatefulWidget {
   final String currentUserId;
@@ -56,7 +58,7 @@ class _MyAddsListPageState extends State<MyAddsListPage>
         Uri.parse('$baseUrl/item/user/${widget.currentUserId}'),
       );
 
-      print('response =  $response');
+      print('response =  ${response.body}');
 
       if (response.statusCode == 200) {
         print('status is 200');
@@ -252,7 +254,15 @@ class _MyAddsListPageState extends State<MyAddsListPage>
           },
         ),
         onTap: () {
-          // Navigate to item detail
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ItemDetailScreen(
+                itemId: item['_id'],
+                currentUserId: widget.currentUserId,
+              ),
+            ),
+          );
         },
       ),
     );
@@ -370,15 +380,22 @@ class _MyAddsListPageState extends State<MyAddsListPage>
 
   // Card for items I'm renting (I am the customer)
   Widget _buildCustomerRequestCard(Map<String, dynamic> request) {
+    if (request['itemId'] == null) return SizedBox(); // Skip if item deleted
+
     final item = request['itemId'];
     final owner = request['renterId'];
     final status = request['status'];
+
+    // Safety check for owner as well
+    if (owner == null) return SizedBox();
 
     return Card(
       margin: EdgeInsets.symmetric(vertical: 4),
       child: ListTile(
         leading: CircleAvatar(
-          child: Text(owner['name'][0].toUpperCase()),
+          child: Text(
+            owner['name'] != null ? owner['name'][0].toUpperCase() : '?',
+          ),
         ),
         title: Text(
           item['itemName'] ?? 'Item',
@@ -388,7 +405,7 @@ class _MyAddsListPageState extends State<MyAddsListPage>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             SizedBox(height: 4),
-            Text('From: ${owner['name']}'),
+            Text('From: ${owner['name'] ?? 'Unknown'}'),
             if (request['startDate'] != null)
               Text(
                 '${_formatDate(request['startDate'])} - ${_formatDate(request['endDate'])}',
@@ -398,25 +415,45 @@ class _MyAddsListPageState extends State<MyAddsListPage>
             _buildStatusChip(status),
           ],
         ),
-        trailing: Text(
-          '₹${request['totalAmount'] ?? 0}',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-          ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: Icon(Icons.chat_bubble_outline, color: Colors.blue),
+              onPressed: () => _openChat(
+                request['_id'],
+                owner['name'] ?? 'User',
+                item['itemName'] ?? 'Item',
+              ),
+              tooltip: 'Chat',
+            ),
+            Text(
+              '₹${request['totalAmount'] ?? 0}',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+          ],
         ),
-        onTap: () {
-          // View request details
-        },
+        onTap: () => _openChat(
+          request['_id'],
+          owner['name'] ?? 'User',
+          item['itemName'] ?? 'Item',
+        ),
       ),
     );
   }
 
   // Card for requests on my items (I am the owner/renter)
   Widget _buildRenterRequestCard(Map<String, dynamic> request) {
+    if (request['itemId'] == null) return SizedBox();
+
     final item = request['itemId'];
     final customer = request['customerId'];
     final status = request['status'];
+
+    if (customer == null) return SizedBox();
 
     return Card(
       margin: EdgeInsets.symmetric(vertical: 4),
@@ -444,12 +481,31 @@ class _MyAddsListPageState extends State<MyAddsListPage>
                 _buildStatusChip(status),
               ],
             ),
-            trailing: Text(
-              '₹${request['totalAmount'] ?? 0}',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: Icon(Icons.chat_bubble_outline, color: Colors.blue),
+                  onPressed: () => _openChat(
+                    request['_id'],
+                    customer['name'] ?? 'User',
+                    item['itemName'] ?? 'Item',
+                  ),
+                  tooltip: 'Chat',
+                ),
+                Text(
+                  '₹${request['totalAmount'] ?? 0}',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+              ],
+            ),
+            onTap: () => _openChat(
+              request['_id'],
+              customer['name'] ?? 'User',
+              item['itemName'] ?? 'Item',
             ),
           ),
           if (status == 'pending')
@@ -528,6 +584,21 @@ class _MyAddsListPageState extends State<MyAddsListPage>
           fontSize: 12,
           color: color,
           fontWeight: FontWeight.w500,
+        ),
+      ),
+    );
+  }
+
+  void _openChat(String requestId, String otherUserName, String itemName) {
+    print('🔷 [MyAds] Opening chat for request: $requestId');
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ChatScreen(
+          requestId: requestId,
+          currentUserId: widget.currentUserId,
+          otherUserName: otherUserName,
+          itemName: itemName,
         ),
       ),
     );

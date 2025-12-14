@@ -28,6 +28,12 @@ class _ChatListScreenState extends State<ChatListScreen> {
   }
 
   Future<void> _loadChats() async {
+    print('🔷 [ChatListScreen] ========== LOADING CHATS ==========');
+    print('🔷 [ChatListScreen] User ID: ${widget.currentUserId}');
+    print(
+      '🔷 [ChatListScreen] API URL: ${kBaseUrl}/chat/user/${widget.currentUserId}',
+    );
+
     setState(() {
       isLoading = true;
       errorMessage = null;
@@ -41,24 +47,62 @@ class _ChatListScreenState extends State<ChatListScreen> {
         ),
       );
 
+      print('🔷 [ChatListScreen] Response status: ${response.statusCode}');
+      print('🔷 [ChatListScreen] Response body: ${response.body}');
+
       if (response.statusCode == 200) {
         final List data = json.decode(response.body);
-        setState(() {
-          chats = data.map((chat) => ChatPreview.fromJson(chat)).toList();
-          isLoading = false;
-        });
+        print('✅ [ChatListScreen] Found ${data.length} chats');
+        if (mounted) {
+          setState(() {
+            chats = data.map((chat) => ChatPreview.fromJson(chat)).toList();
+            isLoading = false;
+          });
+        }
       } else {
+        print('❌ [ChatListScreen] Failed with status: ${response.statusCode}');
+        if (mounted) {
+          setState(() {
+            errorMessage = 'Failed to load chats';
+            isLoading = false;
+          });
+        }
+      }
+    } catch (e, stackTrace) {
+      print('❌ [ChatListScreen] Error loading chats: $e');
+      print('❌ [ChatListScreen] Stack trace: $stackTrace');
+      if (mounted) {
         setState(() {
-          errorMessage = 'Failed to load chats';
+          errorMessage = 'Connection error. Please try again.';
           isLoading = false;
         });
       }
+    }
+  }
+
+  Future<void> _deleteChat(String chatId) async {
+    try {
+      final response = await http.delete(
+        Uri.parse('$kBaseUrl/chat/$chatId'),
+      );
+
+      if (response.statusCode == 200) {
+        setState(() {
+          chats.removeWhere((chat) => chat.chatId == chatId);
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Chat deleted')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to delete chat')),
+        );
+      }
     } catch (e) {
-      print('Error loading chats: $e');
-      setState(() {
-        errorMessage = 'Connection error. Please try again.';
-        isLoading = false;
-      });
+      print('Error deleting chat: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error deleting chat')),
+      );
     }
   }
 
@@ -135,82 +179,147 @@ class _ChatListScreenState extends State<ChatListScreen> {
   }
 
   Widget _buildChatTile(ChatPreview chat) {
-    return Card(
-      margin: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: Colors.blue,
-          child: Text(
-            chat.otherUserName[0].toUpperCase(),
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-          ),
-        ),
-        title: Text(
-          chat.otherUserName,
-          style: TextStyle(fontWeight: FontWeight.w600),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(height: 4),
-            Text(
-              'About: ${chat.itemName}',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey[600],
-                fontStyle: FontStyle.italic,
-              ),
-            ),
-            SizedBox(height: 4),
-            Text(
-              chat.lastMessage,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: Colors.grey[700]),
-            ),
-          ],
-        ),
-        trailing: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text(
-              _formatTime(chat.lastMessageTime),
-              style: TextStyle(fontSize: 11, color: Colors.grey),
-            ),
-            if (chat.unreadCount > 0) ...[
-              SizedBox(height: 4),
-              Container(
-                padding: EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: Colors.blue,
-                  shape: BoxShape.circle,
+    return GestureDetector(
+      onLongPress: () {
+        showDialog(
+          context: context,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              title: const Text("Delete Chat"),
+              content: const Text("Are you sure you want to delete this chat?"),
+              actions: <Widget>[
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text("Cancel"),
                 ),
-                child: Text(
-                  chat.unreadCount.toString(),
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    _deleteChat(chat.chatId);
+                  },
+                  child: const Text(
+                    "Delete",
+                    style: TextStyle(color: Colors.red),
                   ),
                 ),
-              ),
-            ],
+              ],
+            );
+          },
+        );
+      },
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ChatScreen(
+              requestId: chat.requestId,
+              currentUserId: widget.currentUserId,
+              otherUserName: chat.otherUserName,
+              itemName: chat.itemName,
+              chatId: chat.chatId,
+            ),
+          ),
+        ).then((_) => _loadChats()); // Refresh when returning
+      },
+      child: Container(
+        margin: EdgeInsets.only(bottom: 12, left: 8, right: 8),
+        padding: EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: Offset(0, 4),
+            ),
           ],
         ),
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => ChatScreen(
-                requestId: chat.requestId,
-                currentUserId: widget.currentUserId,
-                otherUserName: chat.otherUserName,
-                itemName: chat.itemName,
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 28,
+              backgroundColor: Colors.blue[50],
+              child: Text(
+                chat.otherUserName.isNotEmpty
+                    ? chat.otherUserName[0].toUpperCase()
+                    : '?',
+                style: TextStyle(
+                  color: Colors.blue[700],
+                  fontWeight: FontWeight.bold,
+                  fontSize: 20,
+                ),
               ),
             ),
-          ).then((_) => _loadChats()); // Refresh when returning
-        },
+            SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          chat.otherUserName,
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        _formatTime(chat.lastMessageTime),
+                        style: TextStyle(
+                          color: Colors.grey[500],
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          chat.lastMessage,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: chat.unreadCount > 0
+                                ? Colors.black87
+                                : Colors.grey[600],
+                            fontWeight: chat.unreadCount > 0
+                                ? FontWeight.w600
+                                : FontWeight.normal,
+                          ),
+                        ),
+                      ),
+                      if (chat.unreadCount > 0)
+                        Container(
+                          padding: EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: Colors.blue,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Text(
+                            chat.unreadCount.toString(),
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -232,6 +341,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
 }
 
 class ChatPreview {
+  final String chatId;
   final String requestId;
   final String otherUserName;
   final String itemName;
@@ -240,6 +350,7 @@ class ChatPreview {
   final int unreadCount;
 
   ChatPreview({
+    required this.chatId,
     required this.requestId,
     required this.otherUserName,
     required this.itemName,
@@ -249,10 +360,30 @@ class ChatPreview {
   });
 
   factory ChatPreview.fromJson(Map<String, dynamic> json) {
+    // Safety checks for nested data
+    final requestIdObj = json['requestId'];
+    final participants = json['participants'] as List?;
+
+    String reqId = '';
+    String itemName = 'Unknown Item';
+    String otherName = 'Unknown User';
+
+    if (requestIdObj != null) {
+      reqId = requestIdObj['_id'] ?? '';
+      if (requestIdObj['itemId'] != null) {
+        itemName = requestIdObj['itemId']['itemName'] ?? 'Unknown Item';
+      }
+    }
+
+    if (participants != null && participants.isNotEmpty) {
+      otherName = participants[0]['name'] ?? 'Unknown User';
+    }
+
     return ChatPreview(
-      requestId: json['requestId']['_id'] ?? '',
-      otherUserName: json['participants'][0]['name'] ?? 'Unknown',
-      itemName: json['requestId']['itemId']['itemName'] ?? 'Item',
+      chatId: json['_id'] ?? '',
+      requestId: reqId,
+      otherUserName: otherName,
+      itemName: itemName,
       lastMessage: json['lastMessage'] ?? '',
       lastMessageTime: DateTime.parse(json['lastMessageTime']),
       unreadCount: json['unreadCount'] ?? 0,
