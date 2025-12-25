@@ -4,7 +4,6 @@ import 'package:http/http.dart' as http;
 import 'package:rentmate/constants.dart';
 import 'package:rentmate/item_details_screen.dart';
 import 'package:rentmate/screens/home/widgets/category_list.dart';
-import 'package:rentmate/screens/home/widgets/favorite_button.dart';
 import 'package:rentmate/screens/notifications/notification_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -23,10 +22,23 @@ class _HomeScreenState extends State<HomeScreen> {
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _searchController = TextEditingController();
 
+  // Color scheme
+  static const Color _primaryBlue = Color(0xFF2563EB);
+  static const Color _darkSlate = Color(0xFF1E293B);
+  static const Color _lightGrey = Color(0xFFF1F5F9);
+  static const Color _mediumGrey = Color(0xFF64748B);
+
   @override
   void initState() {
     super.initState();
     _initialize();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _initialize() async {
@@ -72,7 +84,6 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       filteredItems = items.where((item) {
         final name = item['itemName']?.toString().toLowerCase() ?? '';
-
         String categoryName = '';
         final category = item['category'];
         if (category is Map) {
@@ -83,7 +94,6 @@ class _HomeScreenState extends State<HomeScreen> {
         } else if (category is String) {
           categoryName = category.toLowerCase();
         }
-
         return name.contains(lowerQuery) || categoryName.contains(lowerQuery);
       }).toList();
     });
@@ -92,56 +102,57 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: _lightGrey,
       body: RefreshIndicator(
         onRefresh: () => _loadItems(showLoading: false),
-        color: Colors.indigo,
+        color: _primaryBlue,
         child: CustomScrollView(
           controller: _scrollController,
           slivers: [
-            // Custom App Bar Area
+            // App Bar
             SliverAppBar(
               backgroundColor: Colors.white,
               elevation: 0,
               pinned: true,
               floating: true,
-              titleSpacing: 0, // Reduces default left padding
+              titleSpacing: 0,
               automaticallyImplyLeading: false,
               toolbarHeight: 70,
               title: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0),
                 child: Row(
                   children: [
-                    // Logo with reduced margin as requested
                     Image.asset(
                       'assets/images/app logo.png',
                       width: 90,
                       fit: BoxFit.contain,
                     ),
-                    Spacer(),
+                    const Spacer(),
                     // Location Pill
                     Container(
-                      padding: EdgeInsets.symmetric(
+                      padding: const EdgeInsets.symmetric(
                         horizontal: 12,
-                        vertical: 6,
+                        vertical: 8,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.grey[100],
+                        color: _primaryBlue.withOpacity(0.08),
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: Colors.grey.shade300),
+                        border: Border.all(
+                          color: _primaryBlue.withOpacity(0.2),
+                        ),
                       ),
                       child: Row(
                         children: [
                           Icon(
                             Icons.location_on,
                             size: 16,
-                            color: Colors.indigo,
+                            color: _primaryBlue,
                           ),
-                          SizedBox(width: 4),
+                          const SizedBox(width: 4),
                           Text(
                             'Azhikode',
                             style: TextStyle(
-                              color: Colors.black87,
+                              color: _darkSlate,
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
                             ),
@@ -149,21 +160,24 @@ class _HomeScreenState extends State<HomeScreen> {
                         ],
                       ),
                     ),
-                    SizedBox(width: 12),
-                    // Notification Icon
-                    CircleAvatar(
-                      radius: 20,
-                      backgroundColor: Colors.grey[100],
+                    const SizedBox(width: 12),
+                    // Notification
+                    Container(
+                      decoration: BoxDecoration(
+                        color: _lightGrey,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.grey.shade200),
+                      ),
                       child: IconButton(
                         icon: Icon(
-                          Icons.notifications_none,
-                          color: Colors.black87,
+                          Icons.notifications_outlined,
+                          color: _darkSlate,
                         ),
                         onPressed: () {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => NotificationScreen(),
+                              builder: (_) => NotificationScreen(),
                             ),
                           );
                         },
@@ -177,31 +191,38 @@ class _HomeScreenState extends State<HomeScreen> {
             // Search Bar
             SliverToBoxAdapter(
               child: Container(
-                padding: EdgeInsets.fromLTRB(16, 8, 16, 24),
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                 color: Colors.white,
                 child: Container(
                   decoration: BoxDecoration(
-                    color: Colors.grey[100],
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.03),
-                        blurRadius: 10,
-                        offset: Offset(0, 4),
-                      ),
-                    ],
+                    color: _lightGrey,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: Colors.grey.shade200),
                   ),
                   child: TextField(
                     controller: _searchController,
                     onChanged: _filterItems,
+                    style: TextStyle(color: _darkSlate, fontSize: 15),
                     decoration: InputDecoration(
-                      prefixIcon: Icon(Icons.search, color: Colors.indigo),
-                      hintText: "What are you looking for?",
-                      hintStyle: TextStyle(color: Colors.grey[500]),
+                      prefixIcon: Icon(Icons.search, color: _primaryBlue),
+                      suffixIcon: _searchController.text.isNotEmpty
+                          ? IconButton(
+                              icon: Icon(Icons.clear, color: _mediumGrey),
+                              onPressed: () {
+                                _searchController.clear();
+                                _filterItems('');
+                              },
+                            )
+                          : null,
+                      hintText: "Search items, categories...",
+                      hintStyle: TextStyle(
+                        color: _mediumGrey.withOpacity(0.7),
+                        fontSize: 15,
+                      ),
                       border: InputBorder.none,
-                      contentPadding: EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 16,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 14,
                       ),
                     ),
                   ),
@@ -209,10 +230,73 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
 
-            // Categories Section
+            // Hero Banner
+            SliverToBoxAdapter(
+              child: Container(
+                margin: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: _darkSlate,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Rent Anything',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Save money, reduce waste',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 14,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _primaryBlue,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              'List an Item',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(
+                      Icons.handshake_outlined,
+                      color: Colors.white24,
+                      size: 64,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            // Categories
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.only(bottom: 24.0),
+                padding: const EdgeInsets.only(bottom: 16.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -222,40 +306,46 @@ class _HomeScreenState extends State<HomeScreen> {
                         vertical: 8,
                       ),
                       child: Text(
-                        "Explore Categories",
+                        "Categories",
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          color: Colors.black87,
+                          color: _darkSlate,
                         ),
                       ),
                     ),
-                    SizedBox(height: 10),
-                    SizedBox(
-                      height: 105,
-                      child: CategoryList(),
-                    ),
+                    const SizedBox(height: 8),
+                    const SizedBox(height: 105, child: CategoryList()),
                   ],
                 ),
               ),
             ),
 
-            // Recommendation Title
+            // Nearby Items Title
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16.0,
-                  vertical: 8,
-                ),
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      "Recommended for you",
+                      "Nearby Items",
                       style: TextStyle(
-                        fontSize: 20,
+                        fontSize: 18,
                         fontWeight: FontWeight.bold,
-                        color: Colors.black87,
+                        color: _darkSlate,
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () {},
+                      style: TextButton.styleFrom(
+                        foregroundColor: _primaryBlue,
+                        padding: EdgeInsets.zero,
+                        minimumSize: const Size(0, 0),
+                      ),
+                      child: const Text(
+                        'See all',
+                        style: TextStyle(fontWeight: FontWeight.w600),
                       ),
                     ),
                   ],
@@ -265,13 +355,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
             // Product Grid
             SliverPadding(
-              padding: EdgeInsets.all(16),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
               sliver: isLoadingItems
                   ? SliverToBoxAdapter(
                       child: Center(
                         child: Padding(
-                          padding: EdgeInsets.all(40),
-                          child: CircularProgressIndicator(),
+                          padding: const EdgeInsets.all(40),
+                          child: CircularProgressIndicator(color: _primaryBlue),
                         ),
                       ),
                     )
@@ -279,27 +369,47 @@ class _HomeScreenState extends State<HomeScreen> {
                   ? SliverToBoxAdapter(
                       child: Center(
                         child: Padding(
-                          padding: EdgeInsets.only(top: 40),
-                          child: Text(
-                            "No items found",
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: Colors.grey[600],
-                            ),
+                          padding: const EdgeInsets.only(top: 40),
+                          child: Column(
+                            children: [
+                              Icon(
+                                Icons.search_off_rounded,
+                                size: 64,
+                                color: _mediumGrey.withOpacity(0.5),
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                "No items found",
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: _darkSlate,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                "Try a different search term",
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: _mediumGrey,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
                     )
                   : SliverGrid(
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
-                        crossAxisSpacing: 16,
-                        mainAxisSpacing: 16,
-                        childAspectRatio: 0.70, // Adjust for card height
-                      ),
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            crossAxisSpacing: 12,
+                            mainAxisSpacing: 12,
+                            childAspectRatio: 0.68,
+                          ),
                       delegate: SliverChildBuilderDelegate(
                         (context, index) {
-                          return ItemWidget(
+                          return ItemCard(
                             item: filteredItems[index],
                             currentUserId: storedUserId,
                           );
@@ -309,8 +419,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
             ),
 
-            // Bottom Padding
-            SliverToBoxAdapter(child: SizedBox(height: 80)),
+            const SliverToBoxAdapter(child: SizedBox(height: 100)),
           ],
         ),
       ),
@@ -318,8 +427,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-class ItemWidget extends StatelessWidget {
-  const ItemWidget({
+// Premium Item Card
+class ItemCard extends StatelessWidget {
+  const ItemCard({
     super.key,
     required this.item,
     required this.currentUserId,
@@ -328,18 +438,38 @@ class ItemWidget extends StatelessWidget {
   final Map<String, dynamic> item;
   final String? currentUserId;
 
+  static const Color _primaryBlue = Color(0xFF2563EB);
+  static const Color _darkSlate = Color(0xFF1E293B);
+  static const Color _mediumGrey = Color(0xFF64748B);
+
   @override
   Widget build(BuildContext context) {
+    final isAvailable = item['isActive'] ?? true;
+    final createdBy = item['createdBy'];
+    final ownerName = createdBy is Map ? (createdBy['name'] ?? 'User') : 'User';
+
+    // Handle itemId - could be String or Map with $oid
+    String itemId;
+    if (item['_id'] is String) {
+      itemId = item['_id'];
+    } else if (item['_id'] is Map && item['_id']['\$oid'] != null) {
+      itemId = item['_id']['\$oid'];
+    } else {
+      itemId = item['_id'].toString();
+    }
+
     return GestureDetector(
       onTap: () {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (context) => ItemDetailScreen(
-              itemId: item['_id'],
-              currentUserId: currentUserId!,
+        if (currentUserId != null) {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => ItemDetailScreen(
+                itemId: itemId,
+                currentUserId: currentUserId!,
+              ),
             ),
-          ),
-        );
+          );
+        }
       },
       child: Container(
         decoration: BoxDecoration(
@@ -347,9 +477,14 @@ class ItemWidget extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
+              color: _primaryBlue.withOpacity(0.08),
+              blurRadius: 16,
+              offset: const Offset(0, 4),
+            ),
+            BoxShadow(
               color: Colors.black.withOpacity(0.04),
-              blurRadius: 10,
-              offset: Offset(0, 4),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
             ),
           ],
         ),
@@ -357,42 +492,130 @@ class ItemWidget extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Image Section
-            SizedBox(
-              height: 140,
+            Expanded(
+              flex: 5,
               child: Stack(
+                fit: StackFit.expand,
                 children: [
+                  // Main Image
                   ClipRRect(
-                    borderRadius: BorderRadius.vertical(
+                    borderRadius: const BorderRadius.vertical(
                       top: Radius.circular(16),
                     ),
                     child: Container(
-                      width: double.infinity,
-                      color: Colors.grey[100],
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF1F5F9),
+                      ),
                       child: Image.network(
                         item['images'] != null && item['images'].isNotEmpty
                             ? item['images'][0]
                             : 'https://via.placeholder.com/150',
                         fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return Center(
-                            child: Icon(
-                              Icons.image_not_supported,
-                              color: Colors.grey[400],
-                            ),
-                          );
-                        },
+                        errorBuilder: (_, __, ___) => Center(
+                          child: Icon(
+                            Icons.image_outlined,
+                            color: Colors.grey.shade300,
+                            size: 40,
+                          ),
+                        ),
                       ),
                     ),
                   ),
+
+                  // Top badges row
                   Positioned(
-                    top: 8,
-                    right: 8,
+                    top: 10,
+                    left: 10,
+                    right: 10,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        // Status badge
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isAvailable
+                                ? _darkSlate
+                                : Colors.red.shade400,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            isAvailable ? '● Available' : '● Rented',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                        ),
+                        // Favorite button
+                        Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.1),
+                                blurRadius: 8,
+                              ),
+                            ],
+                          ),
+                          child: Icon(
+                            Icons.favorite_border_rounded,
+                            size: 18,
+                            color: _darkSlate,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Price overlay at bottom of image
+                  Positioned(
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
                     child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white, // Semi-transparent white
-                        shape: BoxShape.circle,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
                       ),
-                      child: FavoriteButton(),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.bottomCenter,
+                          end: Alignment.topCenter,
+                          colors: [
+                            Colors.black.withOpacity(0.7),
+                            Colors.transparent,
+                          ],
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Text(
+                            item['basePrice'] != null
+                                ? '₹${item['basePrice']}'
+                                : '₹--',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                          Text(
+                            '/day',
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.8),
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ],
@@ -400,44 +623,81 @@ class ItemWidget extends StatelessWidget {
             ),
 
             // Details Section
-            Padding(
-              padding: const EdgeInsets.all(12.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item['itemName'] ?? 'Unnamed Item',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 15,
-                      color: Colors.black87,
+            Expanded(
+              flex: 3,
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    // Title
+                    Text(
+                      item['itemName'] ?? 'Unnamed Item',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                        color: _darkSlate,
+                        height: 1.2,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Text(
-                        item['basePrice'] != null
-                            ? '₹${item['basePrice']}'
-                            : '₹--',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                          color: Colors.indigo,
+
+                    // Owner + Rating row
+                    Row(
+                      children: [
+                        // Owner avatar
+                        Container(
+                          width: 22,
+                          height: 22,
+                          decoration: BoxDecoration(
+                            color: _primaryBlue.withOpacity(0.1),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Center(
+                            child: Text(
+                              ownerName[0].toUpperCase(),
+                              style: TextStyle(
+                                color: _primaryBlue,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
-                      Text(
-                        ' / day',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[600],
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            ownerName,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: _mediumGrey,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                ],
+                        // Rating
+                        Icon(
+                          Icons.star_rounded,
+                          size: 14,
+                          color: Colors.amber.shade600,
+                        ),
+                        const SizedBox(width: 2),
+                        Text(
+                          '4.8',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: _darkSlate,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ],

@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'package:rentmate/constants.dart';
 import 'package:rentmate/screens/chats/chat_screen.dart';
 import 'package:rentmate/item_details_screen.dart';
+import 'package:rentmate/screens/create_ad_screen.dart';
 
 class MyAddsListPage extends StatefulWidget {
   final String currentUserId;
@@ -245,11 +246,33 @@ class _MyAddsListPageState extends State<MyAddsListPage>
               value: 'delete',
             ),
           ],
-          onSelected: (value) {
+          onSelected: (value) async {
+            // Helper to extract ID string
+            String getIdStr(dynamic id) {
+              if (id is String) return id;
+              if (id is Map && id['\$oid'] != null) return id['\$oid'];
+              return id?.toString() ?? '';
+            }
+
+            final itemId = getIdStr(item['_id']);
+
             if (value == 'edit') {
               // Navigate to edit screen
+              final result = await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => CreateAdScreen(
+                    currentUserId: widget.currentUserId,
+                    itemId: itemId,
+                  ),
+                ),
+              );
+              // Reload items if edit was successful
+              if (result == true) {
+                _loadMyItems();
+              }
             } else if (value == 'delete') {
-              _deleteItem(item['_id']);
+              _deleteItem(itemId);
             }
           },
         ),

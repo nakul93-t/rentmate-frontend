@@ -218,7 +218,7 @@ class _CategoryItemsScreenState extends State<CategoryItemsScreen> {
                     ),
                     itemCount: items.length,
                     itemBuilder: (context, index) {
-                      return ItemWidget(
+                      return ItemCard(
                         item: items[index],
                         currentUserId: currentUserId,
                       );

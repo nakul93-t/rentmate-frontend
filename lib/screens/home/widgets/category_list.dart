@@ -15,6 +15,25 @@ class _CategoryListState extends State<CategoryList> {
   List<dynamic> categories = [];
   bool isLoading = true;
 
+  // Minimal color palette for rent app
+  static const Color _darkColor = Color(0xFF1E293B);
+
+  // Category icons and colors (minimal, professional look)
+  final Map<String, IconData> _categoryIcons = {
+    'electronics': Icons.devices_outlined,
+    'furniture': Icons.chair_outlined,
+    'vehicles': Icons.directions_car_outlined,
+    'tools': Icons.build_outlined,
+    'sports': Icons.sports_basketball_outlined,
+    'clothing': Icons.checkroom_outlined,
+    'books': Icons.menu_book_outlined,
+    'cameras': Icons.camera_alt_outlined,
+    'music': Icons.music_note_outlined,
+    'gaming': Icons.games_outlined,
+    'home': Icons.home_outlined,
+    'outdoor': Icons.park_outlined,
+  };
+
   @override
   void initState() {
     super.initState();
@@ -27,45 +46,54 @@ class _CategoryListState extends State<CategoryList> {
         Uri.parse('$kBaseUrl/category/fetch-all'),
       );
 
-      print('categories response: ${response.body}');
-
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        setState(() {
-          categories =
-              data['data']; // Assuming API returns a list directly or check key
-          isLoading = false;
-        });
+        if (mounted) {
+          setState(() {
+            categories = data['data'];
+            isLoading = false;
+          });
+        }
       } else {
-        print('Failed to load categories: ${response.statusCode}');
-        setState(() => isLoading = false);
+        if (mounted) setState(() => isLoading = false);
       }
     } catch (e) {
       print('Error fetching categories: $e');
-      setState(() => isLoading = false);
+      if (mounted) setState(() => isLoading = false);
     }
+  }
+
+  IconData _getIconForCategory(String name) {
+    final lowerName = name.toLowerCase();
+    for (final key in _categoryIcons.keys) {
+      if (lowerName.contains(key)) {
+        return _categoryIcons[key]!;
+      }
+    }
+    return Icons.category_outlined;
   }
 
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
-      return Center(child: CircularProgressIndicator());
+      return const Center(
+        child: CircularProgressIndicator(color: Color(0xFF2563EB)),
+      );
     }
 
     if (categories.isEmpty) {
-      return SizedBox(); // Or explicit "No categories" text
+      return const SizedBox();
     }
 
     return ListView.separated(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       scrollDirection: Axis.horizontal,
       itemCount: categories.length,
-      separatorBuilder: (_, __) => SizedBox(width: 16),
+      separatorBuilder: (_, __) => const SizedBox(width: 12),
       itemBuilder: (context, index) {
         final category = categories[index];
         final name = category['categoryName'] ?? 'Unknown';
-        final imageUrl =
-            category['image'] ?? ''; // Adjust key based on API response
+        final imageUrl = category['image'] ?? '';
 
         return GestureDetector(
           onTap: () {
@@ -79,45 +107,64 @@ class _CategoryListState extends State<CategoryList> {
               ),
             );
           },
-          child: Column(
-            children: [
-              Container(
-                width: 70,
-                height: 70,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 10,
-                      offset: Offset(0, 5),
+          child: SizedBox(
+            width: 80,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Category Icon Container
+                Container(
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: Colors.grey.shade200,
+                      width: 1,
                     ),
-                  ],
-                ),
-                child: ClipOval(
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.04),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
                   child: imageUrl.isNotEmpty
-                      ? Image.network(
-                          imageUrl,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) =>
-                              Icon(Icons.category, color: Colors.grey),
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(15),
+                          child: Image.network(
+                            imageUrl,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Icon(
+                              _getIconForCategory(name),
+                              color: _darkColor,
+                              size: 28,
+                            ),
+                          ),
                         )
-                      : Icon(Icons.abc, color: Colors.blue),
+                      : Icon(
+                          _getIconForCategory(name),
+                          color: _darkColor,
+                          size: 28,
+                        ),
                 ),
-              ),
-              SizedBox(height: 8),
-              Text(
-                name,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.black87,
+                const SizedBox(height: 8),
+                // Category Name
+                Text(
+                  name,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: _darkColor,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
+              ],
+            ),
           ),
         );
       },

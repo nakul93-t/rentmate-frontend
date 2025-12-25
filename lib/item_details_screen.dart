@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:rentmate/constants.dart';
 import 'package:rentmate/screens/chats/chat_screen.dart';
+import 'package:rentmate/screens/create_ad_screen.dart';
 import 'dart:convert';
 import 'package:intl/intl.dart';
 
@@ -59,7 +60,15 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
           itemData = json.decode(response.body);
           if (itemData!['variants'] != null &&
               itemData!['variants'].isNotEmpty) {
-            selectedVariantId = itemData!['variants'][0]['_id'];
+            // Handle variant _id - could be String or Map
+            final variantId = itemData!['variants'][0]['_id'];
+            if (variantId is String) {
+              selectedVariantId = variantId;
+            } else if (variantId is Map && variantId['\$oid'] != null) {
+              selectedVariantId = variantId['\$oid'];
+            } else {
+              selectedVariantId = variantId?.toString();
+            }
           }
           final creatorId = itemData!['createdBy'] is Map
               ? itemData!['createdBy']['_id']
@@ -293,11 +302,20 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
       bottomSheet: !isOwner ? _buildBottomBar() : null,
       floatingActionButton: isOwner
           ? FloatingActionButton.extended(
-              onPressed: () {
-                // Edit functionality would go here
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Edit feature coming soon')),
+              onPressed: () async {
+                final result = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => CreateAdScreen(
+                      currentUserId: widget.currentUserId,
+                      itemId: widget.itemId,
+                    ),
+                  ),
                 );
+                // Reload item data if edit was successful
+                if (result == true) {
+                  _loadItemDetails();
+                }
               },
               label: Text('Edit Item'),
               icon: Icon(Icons.edit),
@@ -451,9 +469,18 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
   Widget _buildOwnerInfo() {
     final owner = itemData!['createdBy'];
     final ownerName = owner is Map ? (owner['name'] ?? 'Owner') : 'Owner';
-    final ownerLocation = owner is Map
-        ? (owner['location'] ?? 'Unknown Location')
-        : 'Unknown Location';
+
+    // location is a Map with addressName
+    String ownerLocation = 'Unknown Location';
+    if (owner is Map && owner['location'] != null) {
+      final loc = owner['location'];
+      if (loc is Map) {
+        ownerLocation = loc['addressName'] ?? 'Unknown Location';
+      } else if (loc is String) {
+        ownerLocation = loc;
+      }
+    }
+
     final String? profileImage = owner is Map ? owner['profileImage'] : null;
 
     return Container(
@@ -583,6 +610,13 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
   }
 
   Widget _buildVariants() {
+    // Helper to extract ID as string
+    String getIdString(dynamic id) {
+      if (id is String) return id;
+      if (id is Map && id['\$oid'] != null) return id['\$oid'];
+      return id?.toString() ?? '';
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -599,16 +633,31 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
           spacing: 12,
           runSpacing: 12,
           children: (itemData!['variants'] as List).map<Widget>((variant) {
-            final isSelected = selectedVariantId == variant['_id'];
+            final variantIdStr = getIdString(variant['_id']);
+            final isSelected = selectedVariantId == variantIdStr;
+            final stock = variant['stock'] ?? 0;
+            final isOutOfStock = stock <= 0;
+            final isAvailable = variant['isAvailable'] ?? true;
+
             return GestureDetector(
-              onTap: () => setState(() => selectedVariantId = variant['_id']),
+              onTap: isOutOfStock || !isAvailable
+                  ? null
+                  : () => setState(() => selectedVariantId = variantIdStr),
               child: Container(
                 padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: BoxDecoration(
-                  color: isSelected ? Colors.black : Colors.white,
+                  color: isOutOfStock || !isAvailable
+                      ? Colors.grey[100]
+                      : isSelected
+                      ? Colors.black
+                      : Colors.white,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: isSelected ? Colors.black : Colors.grey[300]!,
+                    color: isOutOfStock || !isAvailable
+                        ? Colors.grey[300]!
+                        : isSelected
+                        ? Colors.black
+                        : Colors.grey[300]!,
                     width: 2,
                   ),
                 ),
@@ -616,24 +665,72 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      variant['label'] ?? variant['brand'] ?? 'Variant',
-                      style: TextStyle(
-                        color: isSelected ? Colors.white : Colors.black,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    if (variant['priceModifier'] != null &&
-                        variant['priceModifier'] > 0)
-                      Text(
-                        '+₹${variant['priceModifier']}',
-                        style: TextStyle(
-                          color: isSelected
-                              ? Colors.grey[400]
-                              : Colors.grey[600],
-                          fontSize: 12,
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          variant['label'] ?? variant['brand'] ?? 'Variant',
+                          style: TextStyle(
+                            color: isOutOfStock || !isAvailable
+                                ? Colors.grey[400]
+                                : isSelected
+                                ? Colors.white
+                                : Colors.black,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                      ),
+                        if (isOutOfStock || !isAvailable) ...[
+                          SizedBox(width: 8),
+                          Container(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.red[100],
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              'Out of Stock',
+                              style: TextStyle(
+                                color: Colors.red[700],
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    SizedBox(height: 4),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (variant['priceModifier'] != null &&
+                            variant['priceModifier'] > 0)
+                          Text(
+                            '+₹${variant['priceModifier']}  •  ',
+                            style: TextStyle(
+                              color: isSelected
+                                  ? Colors.grey[400]
+                                  : Colors.grey[600],
+                              fontSize: 12,
+                            ),
+                          ),
+                        Text(
+                          '$stock in stock',
+                          style: TextStyle(
+                            color: stock > 0
+                                ? isSelected
+                                      ? Colors.green[300]
+                                      : Colors.green[600]
+                                : Colors.red[400],
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
