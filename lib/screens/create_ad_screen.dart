@@ -49,7 +49,7 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
   bool isLoadingCategories = true;
   bool isLoadingItem = false;
 
-  String get baseUrl => 'http://$kIpAddress:3000';
+  String get baseUrl => '$kIpAddress';
 
   @override
   void initState() {
@@ -71,15 +71,19 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
 
   Future<void> _loadCategories() async {
     try {
-      final response = await http.get(Uri.parse('$baseUrl/api/category/all'));
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/category/fetch-all'),
+      );
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         setState(() {
           categories = List<Map<String, dynamic>>.from(
-            data['categories'] ?? [],
+            data['data'] ?? [],
           );
           isLoadingCategories = false;
         });
+      } else {
+        setState(() => isLoadingCategories = false);
       }
     } catch (e) {
       setState(() => isLoadingCategories = false);
@@ -158,13 +162,13 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
   Future<void> _loadSubCategories(String categoryId) async {
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/api/subcategory/category/$categoryId'),
+        Uri.parse('$baseUrl/api/sub-category/fetch-all?categoryId=$categoryId'),
       );
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         setState(() {
           subCategories = List<Map<String, dynamic>>.from(
-            data['subCategories'] ?? [],
+            data['data'] ?? [],
           );
         });
       }
@@ -192,7 +196,7 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
       setState(() => isUploadingImage = true);
 
       try {
-        final uri = Uri.parse('$baseUrl/api/item/upload-image');
+        final uri = Uri.parse('$baseUrl/api/upload');
         final request = http.MultipartRequest('POST', uri);
         request.files.add(
           await http.MultipartFile.fromPath(
@@ -211,7 +215,7 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
             imagesList.add(
               ImageData(
                 file: File(pickedFile.path),
-                url: data['imageUrl'],
+                url: data['url'],
                 isExisting: false,
               ),
             );
@@ -238,6 +242,92 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
   void _removeVariant(int index) {
     if (variants.length > 1) {
       setState(() => variants.removeAt(index));
+    }
+  }
+
+  Future<void> _showAddSubCategoryDialog() async {
+    if (selectedCategoryId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Please select a category first')),
+      );
+      return;
+    }
+
+    final controller = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Add New Subcategory'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: InputDecoration(
+            hintText: 'Enter subcategory name',
+            filled: true,
+            fillColor: _lightGrey,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel', style: TextStyle(color: _mediumGrey)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _primaryBlue,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: Text('Add', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (result != null && result.isNotEmpty) {
+      await _createSubCategory(result);
+    }
+  }
+
+  Future<void> _createSubCategory(String name) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/sub-category/create'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'subCategoryName': name,
+          'categoryId': selectedCategoryId,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true && data['data'] != null) {
+          final newSubCategory = data['data'];
+          setState(() {
+            subCategories.add(Map<String, dynamic>.from(newSubCategory));
+            selectedSubCategoryId = newSubCategory['_id'] as String;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Subcategory "$name" created!')),
+          );
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to create subcategory')),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
     }
   }
 
@@ -270,9 +360,10 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
         'priceUnit': selectedPriceUnit,
         'images': imagesList.map((img) => img.url).toList(),
         'variants': variants
+            .where((v) => v.label.isNotEmpty) // Filter out empty labels
             .map(
               (v) => {
-                'type': v.type,
+                'variantType': v.type,
                 'label': v.label,
                 'stock': v.stock,
                 'priceModifier': v.priceModifier,
@@ -476,22 +567,67 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
                           .toList(),
                       onChanged: _onCategoryChanged,
                     ),
-                    if (subCategories.isNotEmpty) ...[
+                    if (selectedCategoryId != null) ...[
                       SizedBox(height: 16),
-                      _buildModernDropdown(
-                        value: selectedSubCategoryId,
-                        label: 'Subcategory',
-                        icon: Icons.subdirectory_arrow_right,
-                        items: subCategories
-                            .map(
-                              (sub) => DropdownMenuItem(
-                                value: sub['_id'] as String,
-                                child: Text(sub['subCategoryName']),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: (v) =>
-                            setState(() => selectedSubCategoryId = v),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: subCategories.isEmpty
+                                ? Container(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 16,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: _lightGrey,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          Icons.subdirectory_arrow_right,
+                                          color: _mediumGrey,
+                                          size: 20,
+                                        ),
+                                        SizedBox(width: 12),
+                                        Text(
+                                          'No subcategories yet',
+                                          style: TextStyle(color: _mediumGrey),
+                                        ),
+                                      ],
+                                    ),
+                                  )
+                                : _buildModernDropdown(
+                                    value: selectedSubCategoryId,
+                                    label: 'Subcategory',
+                                    icon: Icons.subdirectory_arrow_right,
+                                    items: subCategories
+                                        .map(
+                                          (sub) => DropdownMenuItem(
+                                            value: sub['_id'] as String,
+                                            child: Text(sub['subCategoryName']),
+                                          ),
+                                        )
+                                        .toList(),
+                                    onChanged: (v) => setState(
+                                      () => selectedSubCategoryId = v,
+                                    ),
+                                  ),
+                          ),
+                          SizedBox(width: 8),
+                          Container(
+                            decoration: BoxDecoration(
+                              color: _primaryBlue,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: IconButton(
+                              onPressed: _showAddSubCategoryDialog,
+                              icon: Icon(Icons.add, color: Colors.white),
+                              tooltip: 'Add Subcategory',
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                     SizedBox(height: 16),

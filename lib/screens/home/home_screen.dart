@@ -76,27 +76,38 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _filterItems(String query) {
     if (query.isEmpty) {
-      setState(() => filteredItems = items);
+      // Load all items when search is cleared
+      _loadItems(showLoading: false);
       return;
     }
 
-    final lowerQuery = query.toLowerCase();
-    setState(() {
-      filteredItems = items.where((item) {
-        final name = item['itemName']?.toString().toLowerCase() ?? '';
-        String categoryName = '';
-        final category = item['category'];
-        if (category is Map) {
-          categoryName =
-              category['name']?.toString().toLowerCase() ??
-              category['categoryName']?.toString().toLowerCase() ??
-              '';
-        } else if (category is String) {
-          categoryName = category.toLowerCase();
+    // Call backend API with search parameter
+    _searchItems(query);
+  }
+
+  Future<void> _searchItems(String query) async {
+    setState(() => isLoadingItems = true);
+    try {
+      final response = await http.get(
+        Uri.parse(
+          '$kBaseUrl/item/fetch-all?search=${Uri.encodeComponent(query)}',
+        ),
+      );
+      if (response.statusCode == 200) {
+        final formatted = json.decode(response.body);
+        if (mounted) {
+          setState(() {
+            filteredItems = formatted['items'] ?? [];
+            isLoadingItems = false;
+          });
         }
-        return name.contains(lowerQuery) || categoryName.contains(lowerQuery);
-      }).toList();
-    });
+      } else {
+        if (mounted) setState(() => isLoadingItems = false);
+      }
+    } catch (e) {
+      print('Error searching items: $e');
+      if (mounted) setState(() => isLoadingItems = false);
+    }
   }
 
   @override

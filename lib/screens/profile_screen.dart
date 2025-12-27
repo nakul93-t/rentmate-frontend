@@ -3,6 +3,7 @@ import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:rentmate/constants.dart';
+import 'package:rentmate/screens/edit_profile_screen.dart';
 import 'package:rentmate/screens/login_screen.dart';
 import 'package:rentmate/screens/myadds_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -143,7 +144,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 bottom: 0,
                 right: 0,
                 child: GestureDetector(
-                  onTap: () => _showMessage('Edit profile coming soon!'),
+                  onTap: _navigateToEditProfile,
                   child: Container(
                     width: 32,
                     height: 32,
@@ -213,7 +214,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
           // Edit Profile Button
           OutlinedButton.icon(
-            onPressed: () => _showMessage('Edit profile coming soon!'),
+            onPressed: _navigateToEditProfile,
             icon: const Icon(Icons.edit_outlined, size: 18),
             label: const Text('Edit Profile'),
             style: OutlinedButton.styleFrom(
@@ -260,21 +261,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
       child: Column(
         children: [
-          _buildMenuItem(
-            icon: Icons.inventory_2_outlined,
-            title: 'My Rentals',
-            subtitle: 'View items you\'re renting',
-            onTap: () {
-              if (_userId != null) {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => MyAddsListPage(currentUserId: _userId!),
-                  ),
-                );
-              }
-            },
-          ),
+          // _buildMenuItem(
+          //   icon: Icons.inventory_2_outlined,
+          //   title: 'My Rentals',
+          //   subtitle: 'View items you\'re renting',
+          //   onTap: () {
+          //     if (_userId != null) {
+          //       Navigator.push(
+          //         context,
+          //         MaterialPageRoute(
+          //           builder: (_) => MyAddsListPage(currentUserId: _userId!),
+          //         ),
+          //       );
+          //     }
+          //   },
+          // ),
           _buildDivider(),
           _buildMenuItem(
             icon: Icons.campaign_outlined,
@@ -463,6 +464,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ],
       ),
     );
+  }
+
+  void _navigateToEditProfile() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EditProfileScreen(userData: _userData),
+      ),
+    );
+    // Reload profile if changes were saved
+    if (result == true) {
+      _loadProfile();
+    }
   }
 
   void _showMessage(String message, {bool isError = true}) {

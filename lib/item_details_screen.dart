@@ -319,7 +319,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
               },
               label: Text('Edit Item'),
               icon: Icon(Icons.edit),
-              backgroundColor: Colors.black,
+              backgroundColor: Colors.white,
             )
           : null,
     );
