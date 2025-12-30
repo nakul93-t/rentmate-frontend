@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:rentmate/constants.dart';
 import 'package:rentmate/screens/edit_profile_screen.dart';
 import 'package:rentmate/screens/login_screen.dart';
-import 'package:rentmate/screens/myadds_screen.dart';
+import 'package:rentmate/screens/my_renting_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -278,15 +278,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
           // ),
           _buildDivider(),
           _buildMenuItem(
-            icon: Icons.campaign_outlined,
-            title: 'My Ads',
-            subtitle: 'Manage your listed items',
+            icon: Icons.inventory_2_outlined,
+            title: 'My Renting',
+            subtitle: 'View items you\'re renting',
             onTap: () {
               if (_userId != null) {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => MyAddsListPage(currentUserId: _userId!),
+                    builder: (_) => MyRentingScreen(currentUserId: _userId!),
                   ),
                 );
               }

@@ -69,8 +69,14 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
         if (!mounted) return;
         setState(() {
           itemData = json.decode(response.body);
+          print('DEBUG ItemDetails: Full item data: $itemData');
+          print('DEBUG ItemDetails: Variants: ${itemData!['variants']}');
           if (itemData!['variants'] != null &&
               itemData!['variants'].isNotEmpty) {
+            for (var v in itemData!['variants']) {
+              print('DEBUG ItemDetails: Variant: $v');
+              print('DEBUG ItemDetails: Variant image: ${v['image']}');
+            }
             // Handle variant _id - could be String or Map
             final variantId = itemData!['variants'][0]['_id'];
             if (variantId is String) {
@@ -221,12 +227,64 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
   }
 
   Future<void> _chatWithOwner() async {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Please request to rent first to start chatting'),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    if (itemData == null) return;
+
+    setState(() => isRequesting = true);
+
+    try {
+      // Get owner ID
+      final ownerId = itemData!['createdBy'] is Map
+          ? itemData!['createdBy']['_id']
+          : itemData!['createdBy'];
+
+      // Create an inquiry-type rent request to enable chat
+      final response = await http.post(
+        Uri.parse('$kBaseUrl/rent-request'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'itemId': widget.itemId,
+          'customerId': widget.currentUserId,
+          'renterId': ownerId.toString(),
+          'quantity': 1,
+          'deliveryType': 'pickup',
+          // No dates = inquiry status
+        }),
+      );
+
+      if (response.statusCode == 201) {
+        final data = json.decode(response.body);
+        final requestId = data['_id'];
+
+        // Get owner name for chat
+        final ownerName = itemData!['createdBy'] is Map
+            ? itemData!['createdBy']['name'] ?? 'Owner'
+            : 'Owner';
+
+        if (!mounted) return;
+
+        // Navigate to chat screen
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ChatScreen(
+              requestId: requestId,
+              currentUserId: widget.currentUserId,
+              otherUserName: ownerName,
+              itemName: itemData!['itemName'] ?? 'Item',
+            ),
+          ),
+        );
+      } else {
+        // Check if there's already an existing chat/request
+        final errorData = json.decode(response.body);
+        _showErrorSnackBar(errorData['error'] ?? 'Failed to start chat');
+      }
+    } catch (e) {
+      print('Error starting chat: $e');
+      _showErrorSnackBar('Failed to start chat');
+    } finally {
+      if (mounted) setState(() => isRequesting = false);
+    }
   }
 
   void _showErrorSnackBar(String message) {
@@ -684,13 +742,20 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
             final stock = variant['stock'] ?? 0;
             final isOutOfStock = stock <= 0;
             final isAvailable = variant['isAvailable'] ?? true;
+            final variantImage = variant['image'];
 
             return GestureDetector(
               onTap: isOutOfStock || !isAvailable
                   ? null
                   : () => setState(() => selectedVariantId = variantIdStr),
               child: Container(
-                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                width: variantImage != null ? 140 : null,
+                padding: EdgeInsets.all(variantImage != null ? 8 : 16).copyWith(
+                  left: variantImage != null ? 8 : 16,
+                  right: 16,
+                  top: variantImage != null ? 8 : 12,
+                  bottom: 12,
+                ),
                 decoration: BoxDecoration(
                   color: isOutOfStock || !isAvailable
                       ? Colors.grey[100]
@@ -711,18 +776,86 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    // Variant Image
+                    if (variantImage != null) ...[
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => Scaffold(
+                                backgroundColor: Colors.black,
+                                appBar: AppBar(
+                                  backgroundColor: Colors.black,
+                                  iconTheme: IconThemeData(color: Colors.white),
+                                  title: Text(
+                                    variant['label'] ?? 'Variant Image',
+                                    style: TextStyle(
+                                      color: const Color.fromRGBO(
+                                        255,
+                                        255,
+                                        255,
+                                        1,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                body: Center(
+                                  child: InteractiveViewer(
+                                    child: Image.network(
+                                      variantImage,
+                                      fit: BoxFit.contain,
+                                      errorBuilder: (c, e, s) => Center(
+                                        child: Icon(
+                                          Icons.broken_image,
+                                          size: 64,
+                                          color: Colors.grey,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.network(
+                            variantImage,
+                            height: 80,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                            errorBuilder: (c, e, s) => Container(
+                              height: 80,
+                              color: Colors.grey[200],
+                              child: Center(
+                                child: Icon(
+                                  Icons.broken_image_outlined,
+                                  color: Colors.grey[400],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: 8),
+                    ],
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          variant['label'] ?? variant['brand'] ?? 'Variant',
-                          style: TextStyle(
-                            color: isOutOfStock || !isAvailable
-                                ? Colors.grey[400]
-                                : isSelected
-                                ? Colors.white
-                                : Colors.black,
-                            fontWeight: FontWeight.w600,
+                        Flexible(
+                          child: Text(
+                            variant['label'] ?? variant['brand'] ?? 'Variant',
+                            style: TextStyle(
+                              color: isOutOfStock || !isAvailable
+                                  ? Colors.grey[400]
+                                  : isSelected
+                                  ? Colors.white
+                                  : Colors.black,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         if (isOutOfStock || !isAvailable) ...[
@@ -1003,7 +1136,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
     // For trip-based, quantity > 0 is enough (default is 1)
 
     return Container(
-      padding: EdgeInsets.all(24),
+      padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         boxShadow: [
@@ -1015,64 +1148,93 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
         ],
       ),
       child: SafeArea(
-        child: Row(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Expanded(
-              flex: 2,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
+            // Price row
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Total Price',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                    Text(
+                      '₹${total.toStringAsFixed(0)}',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            SizedBox(height: 12),
+            // Buttons row
+            if (!isOwner)
+              Row(
                 children: [
-                  Text(
-                    'Total Price',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
+                  // Chat button
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: !isRequesting ? _chatWithOwner : null,
+                      icon: Icon(Icons.chat_bubble_outline),
+                      label: Text('Chat'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.black,
+                        side: BorderSide(color: Colors.grey[400]!),
+                        padding: EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
                     ),
                   ),
-                  Text(
-                    '₹${total.toStringAsFixed(0)}',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
+                  SizedBox(width: 12),
+                  // Request to Rent button
+                  Expanded(
+                    flex: 2,
+                    child: ElevatedButton(
+                      onPressed: canBook && !isRequesting
+                          ? _requestToRent
+                          : null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.black,
+                        foregroundColor: Colors.white,
+                        padding: EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 0,
+                        disabledBackgroundColor: Colors.grey[300],
+                      ),
+                      child: isRequesting
+                          ? SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : Text(
+                              'Request to Rent',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                     ),
                   ),
                 ],
               ),
-            ),
-            SizedBox(width: 16),
-            Expanded(
-              flex: 3,
-              child: ElevatedButton(
-                onPressed: canBook && !isRequesting ? _requestToRent : null,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.black,
-                  foregroundColor: Colors.white,
-                  padding: EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  elevation: 0,
-                  disabledBackgroundColor: Colors.grey[300],
-                ),
-                child: isRequesting
-                    ? SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : Text(
-                        'Request to Rent',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-              ),
-            ),
           ],
         ),
       ),

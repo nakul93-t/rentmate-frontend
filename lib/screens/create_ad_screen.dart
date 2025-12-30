@@ -186,17 +186,21 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
 
         // Load variants
         final variantsList = item['variants'] as List? ?? [];
+        print('DEBUG: Loading variants from API: $variantsList');
         if (variantsList.isNotEmpty) {
-          variants = variantsList
-              .map(
-                (v) => VariantInput(
-                  type: v['type'] ?? 'brand',
-                  label: v['label'] ?? '',
-                  stock: v['stock'] ?? 0,
-                  priceModifier: (v['priceModifier'] ?? 0).toDouble(),
-                ),
-              )
-              .toList();
+          variants = variantsList.map(
+            (v) {
+              print('DEBUG: Variant data: $v');
+              print('DEBUG: Variant image field: ${v['image']}');
+              return VariantInput(
+                type: v['type'] ?? 'brand',
+                label: v['label'] ?? '',
+                stock: v['stock'] ?? 0,
+                priceModifier: (v['priceModifier'] ?? 0).toDouble(),
+                imageUrl: v['image'],
+              );
+            },
+          ).toList();
         }
 
         setState(() => isLoadingItem = false);
@@ -289,6 +293,45 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
   void _removeVariant(int index) {
     if (variants.length > 1) {
       setState(() => variants.removeAt(index));
+    }
+  }
+
+  Future<void> _pickVariantImage(int index) async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+
+    if (pickedFile != null) {
+      setState(() => variants[index].imageUrl = null); // Show loading
+
+      try {
+        final uri = Uri.parse('$baseUrl/api/upload');
+        final request = http.MultipartRequest('POST', uri);
+        request.files.add(
+          await http.MultipartFile.fromPath(
+            'image',
+            pickedFile.path,
+            contentType: MediaType('image', 'jpeg'),
+          ),
+        );
+
+        final streamedResponse = await request.send();
+        final response = await http.Response.fromStream(streamedResponse);
+
+        if (response.statusCode == 200) {
+          final data = json.decode(response.body);
+          setState(() {
+            variants[index].imageUrl = data['url'];
+          });
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to upload variant image')),
+          );
+        }
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error uploading image: $e')),
+        );
+      }
     }
   }
 
@@ -408,18 +451,20 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
         if (selectedUnit != null) 'unit': selectedUnit,
         'priceUnit': selectedPriceUnit,
         'images': imagesList.map((img) => img.url).toList(),
-        'variants': variants
-            .where((v) => v.label.isNotEmpty)
-            .map(
-              (v) => {
-                'variantType': v.type,
-                'label': v.label,
-                'stock': v.stock,
-                'priceModifier': v.priceModifier,
-                'isAvailable': v.stock > 0,
-              },
-            )
-            .toList(),
+        'variants': variants.where((v) => v.label.isNotEmpty).map(
+          (v) {
+            final variantData = {
+              'variantType': v.type,
+              'label': v.label,
+              'stock': v.stock,
+              'priceModifier': v.priceModifier,
+              'isAvailable': v.stock > 0,
+              if (v.imageUrl != null) 'image': v.imageUrl,
+            };
+            print('DEBUG: Submitting variant: $variantData');
+            return variantData;
+          },
+        ).toList(),
         'createdBy': widget.currentUserId,
       };
 
@@ -1210,6 +1255,109 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
               ),
             ],
           ),
+          // Variant Image Section
+          SizedBox(height: 12),
+          Row(
+            children: [
+              Text(
+                'Variant Image',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: _mediumGrey,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              SizedBox(width: 8),
+              Text(
+                '(Optional)',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: _mediumGrey,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 8),
+          GestureDetector(
+            onTap: () => _pickVariantImage(index),
+            child: Container(
+              height: 80,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: variant.imageUrl != null
+                      ? _primaryBlue.withOpacity(0.5)
+                      : Colors.grey.shade300,
+                  width: variant.imageUrl != null ? 2 : 1,
+                ),
+              ),
+              child: variant.imageUrl != null
+                  ? Stack(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(7),
+                          child: Image.network(
+                            variant.imageUrl!,
+                            height: 80,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) =>
+                                Center(
+                                  child: Icon(
+                                    Icons.broken_image_outlined,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                          ),
+                        ),
+                        Positioned(
+                          top: 4,
+                          right: 4,
+                          child: GestureDetector(
+                            onTap: () {
+                              setState(() => variant.imageUrl = null);
+                            },
+                            child: Container(
+                              padding: EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: Colors.red,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                Icons.close,
+                                color: Colors.white,
+                                size: 14,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  : Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.add_photo_alternate_outlined,
+                            color: _primaryBlue,
+                            size: 28,
+                          ),
+                          SizedBox(height: 4),
+                          Text(
+                            'Add Image',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: _primaryBlue,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+            ),
+          ),
         ],
       ),
     );
@@ -1233,11 +1381,13 @@ class VariantInput {
   String label;
   int stock;
   double priceModifier;
+  String? imageUrl;
 
   VariantInput({
     this.type = 'brand',
     this.label = '',
     this.stock = 0,
     this.priceModifier = 0,
+    this.imageUrl,
   });
 }

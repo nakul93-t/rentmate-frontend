@@ -8,6 +8,8 @@ import 'package:rentmate/constants.dart';
 import 'package:rentmate/screens/chats/chat_screen.dart';
 import 'package:rentmate/item_details_screen.dart';
 import 'package:rentmate/screens/create_ad_screen.dart';
+import 'package:rentmate/screens/rental_acceptance_form.dart';
+import 'package:rentmate/screens/return_item_form.dart';
 
 class MyAddsListPage extends StatefulWidget {
   final String currentUserId;
@@ -27,8 +29,8 @@ class _MyAddsListPageState extends State<MyAddsListPage>
   final String baseUrl = kBaseUrl;
 
   List<dynamic> myItems = [];
-  List<dynamic> itemsImRenting = []; // As customer
-  List<dynamic> requestsForMyItems = []; // As owner/renter
+  List<dynamic> requestsForMyItems = []; // Pending requests as owner
+  List<dynamic> rentedItems = []; // Accepted/active rentals as owner
 
   bool isLoadingItems = true;
   bool isLoadingRequests = true;
@@ -36,7 +38,7 @@ class _MyAddsListPageState extends State<MyAddsListPage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _loadData();
   }
 
@@ -80,13 +82,6 @@ class _MyAddsListPageState extends State<MyAddsListPage>
   Future<void> _loadMyRentRequests() async {
     setState(() => isLoadingRequests = true);
     try {
-      // Get items I'm renting (as customer)
-      final customerResponse = await http.get(
-        Uri.parse(
-          '$baseUrl/rent-request/user/${widget.currentUserId}?role=customer',
-        ),
-      );
-
       // Get requests for my items (as owner/renter)
       final renterResponse = await http.get(
         Uri.parse(
@@ -94,11 +89,24 @@ class _MyAddsListPageState extends State<MyAddsListPage>
         ),
       );
 
-      if (customerResponse.statusCode == 200 &&
-          renterResponse.statusCode == 200) {
+      if (renterResponse.statusCode == 200) {
+        final allRequests = json.decode(renterResponse.body) as List;
+
+        // Separate pending requests from accepted/active rentals
         setState(() {
-          itemsImRenting = json.decode(customerResponse.body);
-          requestsForMyItems = json.decode(renterResponse.body);
+          requestsForMyItems = allRequests
+              .where((r) => ['pending', 'inquiry'].contains(r['status']))
+              .toList();
+          rentedItems = allRequests
+              .where(
+                (r) => [
+                  'accepted',
+                  'active',
+                  'confirmed',
+                  'in_transit',
+                ].contains(r['status']),
+              )
+              .toList();
           isLoadingRequests = false;
         });
       }
@@ -118,6 +126,7 @@ class _MyAddsListPageState extends State<MyAddsListPage>
           tabs: [
             Tab(text: 'My Items'),
             Tab(text: 'Requests'),
+            Tab(text: 'Rented'),
           ],
         ),
       ),
@@ -126,6 +135,7 @@ class _MyAddsListPageState extends State<MyAddsListPage>
         children: [
           _buildMyItemsTab(),
           _buildRequestsTab(),
+          _buildRentedTab(),
         ],
       ),
     );
@@ -307,26 +317,7 @@ class _MyAddsListPageState extends State<MyAddsListPage>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Section A: Items I'm Renting (as customer)
-            _buildSectionHeader(
-              'Items I\'m Renting',
-              itemsImRenting.length,
-              Icons.shopping_bag,
-            ),
-            SizedBox(height: 8),
-            if (itemsImRenting.isEmpty)
-              _buildEmptyState(
-                'No active rentals',
-                'Rent items to see them here',
-              )
-            else
-              ...itemsImRenting
-                  .map((request) => _buildCustomerRequestCard(request))
-                  .toList(),
-
-            SizedBox(height: 24),
-
-            // Section B: Requests for My Items (as owner/renter)
+            // Requests for My Items (as owner/renter)
             _buildSectionHeader(
               'Requests for My Items',
               requestsForMyItems.length,
@@ -339,6 +330,202 @@ class _MyAddsListPageState extends State<MyAddsListPage>
               ...requestsForMyItems
                   .map((request) => _buildRenterRequestCard(request))
                   .toList(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // TAB 3: Rented Items (Accepted/Active rentals)
+  Widget _buildRentedTab() {
+    if (isLoadingRequests) {
+      return Center(child: CircularProgressIndicator());
+    }
+
+    return RefreshIndicator(
+      onRefresh: _loadMyRentRequests,
+      child: SingleChildScrollView(
+        physics: AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.all(8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildSectionHeader(
+              'Currently Rented Out',
+              rentedItems.length,
+              Icons.check_circle,
+            ),
+            SizedBox(height: 8),
+            if (rentedItems.isEmpty)
+              _buildEmptyState(
+                'No active rentals',
+                'Accepted rentals will appear here',
+              )
+            else
+              ...rentedItems
+                  .map((request) => _buildRentedItemCard(request))
+                  .toList(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Card for rented items
+  Widget _buildRentedItemCard(Map<String, dynamic> request) {
+    if (request['itemId'] == null) return SizedBox();
+
+    final item = request['itemId'];
+    final customer = request['customerId'];
+    final status = request['status'];
+    final rentalDetails = request['rentalDetails'];
+
+    if (customer == null) return SizedBox();
+
+    return Card(
+      margin: EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                // Item image
+                Container(
+                  width: 60,
+                  height: 60,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                    color: Colors.grey[200],
+                  ),
+                  child: item['images'] != null && item['images'].isNotEmpty
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.network(
+                            item['images'][0],
+                            fit: BoxFit.cover,
+                            errorBuilder: (c, e, s) =>
+                                Icon(Icons.image, color: Colors.grey),
+                          ),
+                        )
+                      : Icon(Icons.inventory_2, color: Colors.grey),
+                ),
+                SizedBox(width: 12),
+                // Item details
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item['itemName'] ?? 'Item',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        'Rented to: ${customer['name'] ?? 'Customer'}',
+                        style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                      ),
+                      if (rentalDetails != null &&
+                          rentalDetails['customerMobile'] != null)
+                        Text(
+                          'Mobile: ${rentalDetails['customerMobile']}',
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: 12,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                _buildStatusChip(status),
+              ],
+            ),
+            SizedBox(height: 12),
+            // Rental details
+            Container(
+              padding: EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.green.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Rental Period',
+                        style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                      ),
+                      Text(
+                        '${_formatDate(request['startDate'])} - ${_formatDate(request['endDate'])}',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w500,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        'Amount',
+                        style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                      ),
+                      Text(
+                        '₹${request['totalAmount'] ?? 0}',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: Colors.green[700],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(height: 8),
+            // Action buttons
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _openChat(
+                      request['_id'],
+                      customer['name'] ?? 'Customer',
+                      item['itemName'] ?? 'Item',
+                    ),
+                    icon: Icon(Icons.chat_bubble_outline, size: 18),
+                    label: Text('Chat'),
+                    style: OutlinedButton.styleFrom(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                    ),
+                  ),
+                ),
+                SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () => _openReturnItemForm(request),
+                    icon: Icon(Icons.assignment_return, size: 18),
+                    label: Text('Mark Returned'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange,
+                      foregroundColor: Colors.white,
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
       ),
@@ -398,73 +585,6 @@ class _MyAddsListPageState extends State<MyAddsListPage>
               style: TextStyle(fontSize: 12, color: Colors.grey),
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  // Card for items I'm renting (I am the customer)
-  Widget _buildCustomerRequestCard(Map<String, dynamic> request) {
-    if (request['itemId'] == null) return SizedBox(); // Skip if item deleted
-
-    final item = request['itemId'];
-    final owner = request['renterId'];
-    final status = request['status'];
-
-    // Safety check for owner as well
-    if (owner == null) return SizedBox();
-
-    return Card(
-      margin: EdgeInsets.symmetric(vertical: 4),
-      child: ListTile(
-        leading: CircleAvatar(
-          child: Text(
-            owner['name'] != null ? owner['name'][0].toUpperCase() : '?',
-          ),
-        ),
-        title: Text(
-          item['itemName'] ?? 'Item',
-          style: TextStyle(fontWeight: FontWeight.w600),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(height: 4),
-            Text('From: ${owner['name'] ?? 'Unknown'}'),
-            if (request['startDate'] != null)
-              Text(
-                '${_formatDate(request['startDate'])} - ${_formatDate(request['endDate'])}',
-                style: TextStyle(fontSize: 12),
-              ),
-            SizedBox(height: 4),
-            _buildStatusChip(status),
-          ],
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              icon: Icon(Icons.chat_bubble_outline, color: Colors.blue),
-              onPressed: () => _openChat(
-                request['_id'],
-                owner['name'] ?? 'User',
-                item['itemName'] ?? 'Item',
-              ),
-              tooltip: 'Chat',
-            ),
-            Text(
-              '₹${request['totalAmount'] ?? 0}',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ),
-            ),
-          ],
-        ),
-        onTap: () => _openChat(
-          request['_id'],
-          owner['name'] ?? 'User',
-          item['itemName'] ?? 'Item',
         ),
       ),
     );
@@ -551,8 +671,7 @@ class _MyAddsListPageState extends State<MyAddsListPage>
                   SizedBox(width: 8),
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: () =>
-                          _updateRequestStatus(request['_id'], 'accepted'),
+                      onPressed: () => _openRentalAcceptanceForm(request),
                       child: Text('Accept'),
                     ),
                   ),
@@ -629,12 +748,54 @@ class _MyAddsListPageState extends State<MyAddsListPage>
     );
   }
 
+  void _openRentalAcceptanceForm(Map<String, dynamic> request) async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => RentalAcceptanceForm(
+          request: request,
+          currentUserId: widget.currentUserId,
+        ),
+      ),
+    );
+
+    if (result == true) {
+      _loadMyRentRequests();
+    }
+  }
+
+  void _openReturnItemForm(Map<String, dynamic> request) async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ReturnItemForm(
+          request: request,
+          currentUserId: widget.currentUserId,
+        ),
+      ),
+    );
+
+    if (result == true) {
+      _loadMyRentRequests();
+    }
+  }
+
   Future<void> _updateRequestStatus(String requestId, String status) async {
     try {
+      // Use the correct endpoint based on status
+      String endpoint = '$baseUrl/rent-request/$requestId/status';
+      Map<String, dynamic> body = {'status': status};
+
+      // For returned status, use the dedicated /return endpoint
+      if (status == 'returned') {
+        endpoint = '$baseUrl/rent-request/$requestId/return';
+        body = {'actualReturnDate': DateTime.now().toIso8601String()};
+      }
+
       final response = await http.put(
-        Uri.parse('$baseUrl/rent-request/$requestId/status'),
+        Uri.parse(endpoint),
         headers: {'Content-Type': 'application/json'},
-        body: json.encode({'status': status}),
+        body: json.encode(body),
       );
 
       if (response.statusCode == 200) {
@@ -642,6 +803,11 @@ class _MyAddsListPageState extends State<MyAddsListPage>
           SnackBar(content: Text('Request ${status}!')),
         );
         _loadMyRentRequests();
+      } else {
+        final error = json.decode(response.body);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error['error'] ?? 'Failed to update')),
+        );
       }
     } catch (e) {
       print('Error updating status: $e');

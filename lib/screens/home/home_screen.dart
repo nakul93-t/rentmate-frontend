@@ -347,18 +347,18 @@ class _HomeScreenState extends State<HomeScreen> {
                         color: _darkSlate,
                       ),
                     ),
-                    TextButton(
-                      onPressed: () {},
-                      style: TextButton.styleFrom(
-                        foregroundColor: _primaryBlue,
-                        padding: EdgeInsets.zero,
-                        minimumSize: const Size(0, 0),
-                      ),
-                      child: const Text(
-                        'See all',
-                        style: TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                    ),
+                    // TextButton(
+                    //   onPressed: () {},
+                    //   style: TextButton.styleFrom(
+                    //     foregroundColor: _primaryBlue,
+                    //     padding: EdgeInsets.zero,
+                    //     minimumSize: const Size(0, 0),
+                    //   ),
+                    //   child: const Text(
+                    //     'See all',
+                    //     style: TextStyle(fontWeight: FontWeight.w600),
+                    //   ),
+                    // ),
                   ],
                 ),
               ),

@@ -69,6 +69,26 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  Future<void> _markMessagesAsRead() async {
+    try {
+      print(
+        '🔷 [ChatScreen] Marking messages as read for request: ${widget.requestId}',
+      );
+      final response = await http.put(
+        Uri.parse('$kBaseUrl/chat/request/${widget.requestId}/read'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'userId': widget.currentUserId}),
+      );
+      if (response.statusCode == 200) {
+        print('✅ [ChatScreen] Messages marked as read');
+      } else {
+        print('❌ [ChatScreen] Failed to mark as read: ${response.body}');
+      }
+    } catch (e) {
+      print('❌ [ChatScreen] Error marking messages as read: $e');
+    }
+  }
+
   Future<void> _deleteChat() async {
     if (_currentChatId == null) return;
 
@@ -236,6 +256,8 @@ class _ChatScreenState extends State<ChatScreen> {
           isLoading = false;
         });
         _scrollToBottom();
+        // Mark messages as read when chat history is loaded
+        _markMessagesAsRead();
       } catch (e) {
         print('❌ [ChatScreen] Error processing chat history: $e');
         setState(() => isLoading = false);
@@ -251,6 +273,10 @@ class _ChatScreenState extends State<ChatScreen> {
           isSending = false;
         });
         _scrollToBottom();
+        // Mark messages as read when new message arrives (if from other user)
+        if (newMessage.senderId != widget.currentUserId) {
+          _markMessagesAsRead();
+        }
       } catch (e) {
         print('❌ [ChatScreen] Error parsing new message: $e');
       }
