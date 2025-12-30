@@ -1,3 +1,5 @@
+import 'dart:developer';
+
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -672,7 +674,7 @@ class _MyAddsListPageState extends State<MyAddsListPage>
     if (confirm == true) {
       try {
         final response = await http.delete(
-          Uri.parse('$baseUrl/item/$itemId'),
+          Uri.parse('$baseUrl/item/delete/$itemId'),
         );
 
         if (response.statusCode == 200) {
@@ -680,9 +682,11 @@ class _MyAddsListPageState extends State<MyAddsListPage>
             SnackBar(content: Text('Item deleted')),
           );
           _loadMyItems();
+        } else {
+          log('Failed to delete item: ${response.body}');
         }
       } catch (e) {
-        print('Error deleting item: $e');
+        log('Error deleting item: $e');
       }
     }
   }

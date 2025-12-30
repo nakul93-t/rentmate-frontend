@@ -24,10 +24,7 @@ class _AppShellState extends State<AppShell> {
   List<Widget> _getPages() {
     return [
       HomeScreen(),
-      ChatListScreen(currentUserId: widget.currentUserId), // Pass userId here
-      CreateAdScreen(
-        currentUserId: widget.currentUserId,
-      ),
+      ChatListScreen(currentUserId: widget.currentUserId),
       MyAddsListPage(
         currentUserId: widget.currentUserId,
       ),
@@ -46,9 +43,14 @@ class _AppShellState extends State<AppShell> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          setState(() {
-            _selectedIndex = 2; // Navigate to Create Ad
-          });
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => CreateAdScreen(
+                currentUserId: widget.currentUserId,
+              ),
+            ),
+          );
         },
         backgroundColor: Colors.blue,
         child: Icon(Icons.add, color: Colors.white),
@@ -77,12 +79,12 @@ class _AppShellState extends State<AppShell> {
               _buildNavItem(
                 icon: Icons.receipt_long_outlined,
                 label: 'My Ads',
-                index: 3,
+                index: 2,
               ),
               _buildNavItem(
                 icon: Icons.person_outline,
                 label: 'Profile',
-                index: 4,
+                index: 3,
               ),
             ],
           ),

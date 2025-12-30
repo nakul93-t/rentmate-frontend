@@ -32,14 +32,17 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
   final _priceController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _depositController = TextEditingController();
+  final _minChargeController = TextEditingController();
+  final _lateFeeController = TextEditingController();
 
   bool get isEditMode => widget.itemId != null;
 
   List<Map<String, dynamic>> categories = [];
   List<Map<String, dynamic>> subCategories = [];
+  List<Map<String, dynamic>> priceUnits = []; // From API
   String? selectedCategoryId;
   String? selectedSubCategoryId;
-  String selectedUnit = 'piece';
+  String? selectedUnit; // Made nullable since optional for services
   String selectedPriceUnit = 'day';
   List<ImageData> imagesList = [];
   List<VariantInput> variants = [VariantInput()];
@@ -55,6 +58,7 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
   void initState() {
     super.initState();
     _loadCategories();
+    _loadPriceUnits();
     if (isEditMode) {
       _loadExistingItem();
     }
@@ -66,6 +70,8 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
     _priceController.dispose();
     _descriptionController.dispose();
     _depositController.dispose();
+    _minChargeController.dispose();
+    _lateFeeController.dispose();
     super.dispose();
   }
 
@@ -90,6 +96,38 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
     }
   }
 
+  Future<void> _loadPriceUnits() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/config/price-units'),
+      );
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        setState(() {
+          priceUnits = List<Map<String, dynamic>>.from(data['data'] ?? []);
+        });
+      }
+    } catch (e) {
+      // Fallback to default if API fails
+      setState(() {
+        priceUnits = [
+          {'value': 'day', 'label': 'Per Day', 'category': 'time'},
+          {'value': 'hour', 'label': 'Per Hour', 'category': 'time'},
+          {'value': 'week', 'label': 'Per Week', 'category': 'time'},
+          {'value': 'month', 'label': 'Per Month', 'category': 'time'},
+          {'value': 'km', 'label': 'Per Km', 'category': 'distance'},
+          {'value': 'mile', 'label': 'Per Mile', 'category': 'distance'},
+          {'value': 'trip', 'label': 'Per Trip', 'category': 'fixed'},
+        ];
+      });
+    }
+  }
+
+  // Helper to check if current price unit is distance/trip based
+  bool get _isDistanceOrTripBased {
+    return ['km', 'mile', 'trip'].contains(selectedPriceUnit);
+  }
+
   Future<void> _loadExistingItem() async {
     if (widget.itemId == null) return;
     setState(() => isLoadingItem = true);
@@ -100,20 +138,29 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
       );
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        final item = data['item'];
+        // API returns item directly, not wrapped in {item: ...}
+        final item = data['item'] ?? data;
 
-        // Helper to extract ID string
+        // Helper to extract ID string from various formats
         String getIdStr(dynamic id) {
           if (id is String) return id;
-          if (id is Map && id['\$oid'] != null) return id['\$oid'];
+          if (id is Map) {
+            // Handle MongoDB ObjectId format
+            if (id['\$oid'] != null) return id['\$oid'];
+            // Handle populated object format (e.g., {_id: '...', name: '...'})
+            if (id['_id'] != null) return getIdStr(id['_id']);
+          }
           return id?.toString() ?? '';
         }
 
         _nameController.text = item['itemName'] ?? '';
         _priceController.text = (item['basePrice'] ?? 0).toString();
         _descriptionController.text = item['description'] ?? '';
-        _depositController.text = (item['depositAmount'] ?? 0).toString();
-        selectedUnit = item['unit'] ?? 'piece';
+        _depositController.text =
+            (item['securityDeposit'] ?? item['depositAmount'] ?? 0).toString();
+        _minChargeController.text = (item['minimumCharge'] ?? 0).toString();
+        _lateFeeController.text = (item['lateFeePerDay'] ?? 0).toString();
+        selectedUnit = item['unit'];
         selectedPriceUnit = item['priceUnit'] ?? 'day';
         selectedCategoryId = getIdStr(item['categoryId']);
         selectedSubCategoryId = item['subCategoryId'] != null
@@ -355,12 +402,14 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
         'subCategoryId': selectedSubCategoryId,
         'basePrice': double.parse(_priceController.text),
         'description': _descriptionController.text,
-        'depositAmount': double.tryParse(_depositController.text) ?? 0,
-        'unit': selectedUnit,
+        'securityDeposit': double.tryParse(_depositController.text) ?? 0,
+        'minimumCharge': double.tryParse(_minChargeController.text) ?? 0,
+        'lateFeePerDay': double.tryParse(_lateFeeController.text) ?? 0,
+        if (selectedUnit != null) 'unit': selectedUnit,
         'priceUnit': selectedPriceUnit,
         'images': imagesList.map((img) => img.url).toList(),
         'variants': variants
-            .where((v) => v.label.isNotEmpty) // Filter out empty labels
+            .where((v) => v.label.isNotEmpty)
             .map(
               (v) => {
                 'variantType': v.type,
@@ -421,9 +470,13 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
     _priceController.clear();
     _descriptionController.clear();
     _depositController.clear();
+    _minChargeController.clear();
+    _lateFeeController.clear();
     setState(() {
       selectedCategoryId = null;
       selectedSubCategoryId = null;
+      selectedUnit = null;
+      selectedPriceUnit = 'day';
       subCategories = [];
       imagesList = [];
       variants = [VariantInput()];
@@ -673,14 +726,31 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
                           child: _buildModernDropdown(
                             value: selectedPriceUnit,
                             label: 'Per',
-                            items: ['day', 'hour', 'week', 'month']
-                                .map(
-                                  (u) => DropdownMenuItem(
-                                    value: u,
-                                    child: Text(u),
-                                  ),
-                                )
-                                .toList(),
+                            items: priceUnits.isEmpty
+                                ? [
+                                        'day',
+                                        'hour',
+                                        'week',
+                                        'month',
+                                        'km',
+                                        'mile',
+                                        'trip',
+                                      ]
+                                      .map(
+                                        (u) => DropdownMenuItem(
+                                          value: u,
+                                          child: Text(u),
+                                        ),
+                                      )
+                                      .toList()
+                                : priceUnits
+                                      .map(
+                                        (u) => DropdownMenuItem(
+                                          value: u['value'] as String,
+                                          child: Text(u['label'] as String),
+                                        ),
+                                      )
+                                      .toList(),
                             onChanged: (v) =>
                                 setState(() => selectedPriceUnit = v!),
                           ),
@@ -701,22 +771,27 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
                         ),
                         SizedBox(width: 12),
                         Expanded(
-                          child: _buildModernDropdown(
-                            value: selectedUnit,
-                            label: 'Unit',
-                            items: ['piece', 'kg', 'box', 'meter', 'liter']
-                                .map(
-                                  (u) => DropdownMenuItem(
-                                    value: u,
-                                    child: Text(u),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: (v) => setState(() => selectedUnit = v!),
+                          child: _buildModernTextField(
+                            controller: _minChargeController,
+                            label: 'Minimum Charge',
+                            hint: '0',
+                            icon: Icons.price_change_outlined,
+                            keyboardType: TextInputType.number,
                           ),
                         ),
                       ],
                     ),
+                    // Show Late Fee field only for distance/trip based pricing
+                    if (_isDistanceOrTripBased) ...[
+                      SizedBox(height: 16),
+                      _buildModernTextField(
+                        controller: _lateFeeController,
+                        label: 'Late Fee Per Day',
+                        hint: 'Fee charged per day for late returns',
+                        icon: Icons.access_time,
+                        keyboardType: TextInputType.number,
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -903,6 +978,7 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
       value: value,
       items: items,
       onChanged: onChanged,
+      isExpanded: true, // Fix overflow for longer labels
       decoration: InputDecoration(
         labelText: '$label${required ? ' *' : ''}',
         prefixIcon: icon != null

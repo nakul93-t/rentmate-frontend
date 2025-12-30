@@ -29,6 +29,17 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
   int quantity = 1;
   String? selectedVariantId;
   bool isRequesting = false;
+  final _distanceController = TextEditingController();
+
+  // Helper getters for pricing type
+  bool get isDistanceBased => ['km', 'mile'].contains(itemData?['priceUnit']);
+  bool get isTripBased => itemData?['priceUnit'] == 'trip';
+  bool get isTimeBased => [
+    'day',
+    'hour',
+    'week',
+    'month',
+  ].contains(itemData?['priceUnit'] ?? 'day');
 
   @override
   void initState() {
@@ -89,33 +100,29 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
   }
 
   Future<void> _requestToRent() async {
-    if (startDate == null || endDate == null) {
+    // Validate based on pricing type
+    if (isTimeBased && (startDate == null || endDate == null)) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Please select rental dates')),
       );
       return;
     }
 
+    if (isDistanceBased) {
+      final distance = double.tryParse(_distanceController.text) ?? 0;
+      if (distance <= 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Please enter the estimated distance')),
+        );
+        return;
+      }
+    }
+
     setState(() => isRequesting = true);
 
     try {
-      final days = endDate!.difference(startDate!).inDays + 1;
-      final basePrice =
-          double.tryParse(itemData!['basePrice'].toString()) ?? 0.0;
-
-      // Calculate variant price modifier if any
-      double variantPrice = 0;
-      if (selectedVariantId != null) {
-        final variant = (itemData!['variants'] as List).firstWhere(
-          (v) => v['_id'] == selectedVariantId,
-          orElse: () => {},
-        );
-        variantPrice =
-            double.tryParse(variant['priceModifier']?.toString() ?? '0') ?? 0.0;
-      }
-
-      final finalPricePerDay = basePrice + variantPrice;
-      final rentalPrice = finalPricePerDay * days * quantity;
+      // Calculate rental price based on pricing type
+      final rentalPrice = _calculateTotal();
 
       // Validate renter info
       final renterData = itemData!['createdBy'];
@@ -134,22 +141,35 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
         return;
       }
 
+      // Build request body based on pricing type
+      final requestBody = {
+        'itemId': widget.itemId,
+        'customerId': widget.currentUserId,
+        'renterId': renterId,
+        'selectedVariantId': selectedVariantId,
+        'quantity': quantity,
+        'rentalPrice': rentalPrice,
+        'totalAmount': rentalPrice,
+        'deliveryType': 'pickup',
+        'status': 'pending',
+      };
+
+      // Add dates for time-based items
+      if (isTimeBased && startDate != null && endDate != null) {
+        requestBody['startDate'] = startDate!.toIso8601String();
+        requestBody['endDate'] = endDate!.toIso8601String();
+      }
+
+      // Add distance for km/mile items
+      if (isDistanceBased) {
+        requestBody['estimatedDistance'] =
+            double.tryParse(_distanceController.text) ?? 0;
+      }
+
       final response = await http.post(
         Uri.parse('$kBaseUrl/rent-request'),
         headers: {'Content-Type': 'application/json'},
-        body: json.encode({
-          'itemId': widget.itemId,
-          'customerId': widget.currentUserId,
-          'renterId': renterId,
-          'selectedVariantId': selectedVariantId,
-          'startDate': startDate!.toIso8601String(),
-          'endDate': endDate!.toIso8601String(),
-          'quantity': quantity,
-          'rentalPrice': rentalPrice,
-          'totalAmount': rentalPrice,
-          'deliveryType': 'pickup',
-          'status': 'pending',
-        }),
+        body: json.encode(requestBody),
       );
 
       if (response.statusCode == 201 || response.statusCode == 200) {
@@ -287,8 +307,15 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                     SizedBox(height: 24),
                     Divider(),
                     SizedBox(height: 24),
-                    _buildDateSelection(),
-                    SizedBox(height: 24),
+                    // Show appropriate input based on pricing type
+                    if (isTimeBased) ...[
+                      _buildDateSelection(),
+                      SizedBox(height: 24),
+                    ],
+                    if (isDistanceBased) ...[
+                      _buildDistanceInput(),
+                      SizedBox(height: 24),
+                    ],
                     _buildQuantitySelector(),
                   ],
                   // Add bottom padding for the fixed button or scrolling
@@ -434,7 +461,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(
-                '₹${itemData!['basePrice']}/day',
+                '₹${itemData!['basePrice']}/${itemData!['priceUnit'] ?? 'day'}',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -442,6 +469,25 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                 ),
               ),
             ),
+            if (itemData!['minimumCharge'] != null &&
+                itemData!['minimumCharge'] > 0) ...[
+              SizedBox(width: 8),
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.orange[100],
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  'Min ₹${itemData!['minimumCharge']}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.orange[800],
+                  ),
+                ),
+              ),
+            ],
             if (itemData!['brand'] != null) ...[
               SizedBox(width: 12),
               Container(
@@ -796,7 +842,10 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
     if (itemData!['createdBy'] == null) return SizedBox.shrink();
 
     final date = isStartDate ? startDate : endDate;
-    final label = isStartDate ? 'Start Date' : 'End Date';
+    final isHourly = itemData!['priceUnit'] == 'hour';
+    final label = isStartDate
+        ? (isHourly ? 'Start Time' : 'Start Date')
+        : (isHourly ? 'End Time' : 'End Date');
     final isSelected = date != null;
 
     return GestureDetector(
@@ -831,7 +880,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
             ),
             SizedBox(height: 8),
             Text(
-              isSelected ? DateFormat('dd MMM, yyyy').format(date) : 'Select',
+              isSelected ? DateFormat('dd MMM, HH:mm').format(date!) : 'Select',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
@@ -841,6 +890,51 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildDistanceInput() {
+    if (itemData!['createdBy'] == null) return SizedBox.shrink();
+
+    final priceUnit = itemData!['priceUnit'] ?? 'km';
+    final unitLabel = priceUnit == 'mile' ? 'miles' : 'km';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Estimated Distance',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        SizedBox(height: 8),
+        Text(
+          'Enter the approximate distance for your rental',
+          style: TextStyle(
+            fontSize: 13,
+            color: Colors.grey[600],
+          ),
+        ),
+        SizedBox(height: 16),
+        TextField(
+          controller: _distanceController,
+          keyboardType: TextInputType.number,
+          decoration: InputDecoration(
+            hintText: 'Enter distance',
+            suffixText: unitLabel,
+            filled: true,
+            fillColor: Colors.grey[100],
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+            contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          ),
+          onChanged: (_) => setState(() {}),
+        ),
+      ],
     );
   }
 
@@ -897,7 +991,16 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
 
   Widget _buildBottomBar() {
     final double total = _calculateTotal();
-    final bool canBook = startDate != null && endDate != null && !isOwner;
+
+    // Determine if user can book based on pricing type
+    bool canBook = !isOwner;
+    if (isTimeBased) {
+      canBook = canBook && startDate != null && endDate != null;
+    } else if (isDistanceBased) {
+      final distance = double.tryParse(_distanceController.text) ?? 0;
+      canBook = canBook && distance > 0;
+    }
+    // For trip-based, quantity > 0 is enough (default is 1)
 
     return Container(
       padding: EdgeInsets.all(24),
@@ -977,12 +1080,13 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
   }
 
   Future<void> _selectDate(bool isStartDate) async {
-    final DateTime? picked = await showDatePicker(
+    final DateTime? pickedDate = await showDatePicker(
       context: context,
       initialDate: isStartDate
-          ? (startDate ?? DateTime.now().add(Duration(days: 1)))
-          : (endDate ?? (startDate ?? DateTime.now())),
-      firstDate: DateTime.now().add(Duration(days: 1)),
+          ? (startDate ?? DateTime.now())
+          : (endDate ?? startDate ?? DateTime.now()),
+      // For end date, firstDate is startDate to allow same-day selection
+      firstDate: isStartDate ? DateTime.now() : (startDate ?? DateTime.now()),
       lastDate: DateTime.now().add(Duration(days: 365)),
       builder: (context, child) {
         return Theme(
@@ -998,30 +1102,112 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
       },
     );
 
-    if (picked != null) {
-      setState(() {
-        if (isStartDate) {
-          startDate = picked;
-          if (endDate != null && endDate!.isBefore(startDate!)) {
-            endDate = null;
-          }
-        } else {
-          if (startDate != null && picked.isBefore(startDate!)) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('End date must be after start date')),
-            );
-          } else {
-            endDate = picked;
-          }
-        }
-      });
+    if (pickedDate == null) return;
+
+    DateTime finalDateTime = pickedDate;
+
+    // For all time-based pricing, also pick time for accurate calculation
+    if (isTimeBased) {
+      final TimeOfDay? pickedTime = await showTimePicker(
+        context: context,
+        initialTime: TimeOfDay.now(),
+        builder: (context, child) {
+          return Theme(
+            data: Theme.of(context).copyWith(
+              colorScheme: ColorScheme.light(
+                primary: Colors.black,
+                onPrimary: Colors.white,
+                onSurface: Colors.black,
+              ),
+            ),
+            child: child!,
+          );
+        },
+      );
+
+      if (pickedTime == null) return;
+
+      finalDateTime = DateTime(
+        pickedDate.year,
+        pickedDate.month,
+        pickedDate.day,
+        pickedTime.hour,
+        pickedTime.minute,
+      );
     }
+
+    // Validate start time is not in the past
+    if (isStartDate && finalDateTime.isBefore(DateTime.now())) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Start time cannot be in the past')),
+      );
+      return;
+    }
+
+    // Validate end time is after start time (not equal)
+    if (!isStartDate && startDate != null) {
+      if (finalDateTime.isBefore(startDate!) ||
+          finalDateTime.isAtSameMomentAs(startDate!)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('End time must be after start time')),
+        );
+        return;
+      }
+    }
+
+    setState(() {
+      if (isStartDate) {
+        startDate = finalDateTime;
+        // Clear end date if it's now before or equal to start
+        if (endDate != null &&
+            (endDate!.isBefore(startDate!) ||
+                endDate!.isAtSameMomentAs(startDate!))) {
+          endDate = null;
+        }
+      } else {
+        endDate = finalDateTime;
+      }
+    });
   }
 
   double _calculateTotal() {
-    if (startDate == null || endDate == null) return 0;
-    final days = endDate!.difference(startDate!).inDays + 1;
+    final priceUnit = itemData!['priceUnit'] ?? 'day';
     final basePrice = double.tryParse(itemData!['basePrice'].toString()) ?? 0.0;
+    final minimumCharge =
+        double.tryParse(itemData!['minimumCharge']?.toString() ?? '0') ?? 0.0;
+
+    double units = 0;
+
+    if (isDistanceBased) {
+      // For km/mile, use distance input
+      units = double.tryParse(_distanceController.text) ?? 0;
+    } else if (isTripBased) {
+      // For trip, use quantity directly
+      units = quantity.toDouble();
+    } else {
+      // For time-based (day, hour, week, month)
+      if (startDate == null || endDate == null) return 0;
+
+      if (priceUnit == 'hour') {
+        units = endDate!.difference(startDate!).inHours.toDouble();
+        if (units < 1) units = 1;
+      } else if (priceUnit == 'week') {
+        // Calculate based on hours for more accuracy
+        final hours = endDate!.difference(startDate!).inHours;
+        units = (hours / 168).ceil().toDouble(); // 168 hours in a week
+        if (units < 1) units = 1;
+      } else if (priceUnit == 'month') {
+        final hours = endDate!.difference(startDate!).inHours;
+        units = (hours / 720).ceil().toDouble(); // ~720 hours in a month
+        if (units < 1) units = 1;
+      } else {
+        // day - calculate based on hours for accuracy
+        // 11 AM Mon to 10 AM Tue = 23 hours = 1 day (ceiling of 23/24)
+        final hours = endDate!.difference(startDate!).inHours;
+        units = (hours / 24).ceil().toDouble();
+        if (units < 1) units = 1;
+      }
+    }
 
     // Calculate variant price modifier
     double variantPrice = 0;
@@ -1034,6 +1220,11 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
           double.tryParse(variant['priceModifier']?.toString() ?? '0') ?? 0.0;
     }
 
-    return (basePrice + variantPrice) * days * quantity;
+    // For trip-based, quantity is already factored in as units
+    final qtyMultiplier = isTripBased ? 1 : quantity;
+    final calculatedTotal = (basePrice + variantPrice) * units * qtyMultiplier;
+
+    // Apply minimum charge if calculated total is less
+    return calculatedTotal > minimumCharge ? calculatedTotal : minimumCharge;
   }
 }
