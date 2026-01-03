@@ -5,7 +5,8 @@ import 'package:http/http.dart' as http;
 import 'package:rentmate/constants.dart';
 import 'package:rentmate/screens/edit_profile_screen.dart';
 import 'package:rentmate/screens/login_screen.dart';
-import 'package:rentmate/screens/my_renting_screen.dart';
+import 'package:rentmate/screens/my_rentals_screen.dart';
+import 'package:rentmate/screens/my_listings_rentals_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -278,15 +279,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
           // ),
           _buildDivider(),
           _buildMenuItem(
-            icon: Icons.inventory_2_outlined,
-            title: 'My Renting',
-            subtitle: 'View items you\'re renting',
+            icon: Icons.shopping_bag_outlined,
+            title: 'My Rentals',
+            subtitle: 'Items you\'ve rented from others',
             onTap: () {
               if (_userId != null) {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => MyRentingScreen(currentUserId: _userId!),
+                    builder: (_) => MyRentalsScreen(currentUserId: _userId!),
+                  ),
+                );
+              }
+            },
+          ),
+          _buildDivider(),
+          _buildMenuItem(
+            icon: Icons.receipt_long_outlined,
+            title: 'My Listings\' Rentals',
+            subtitle: 'Items others are renting from you',
+            onTap: () {
+              if (_userId != null) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        MyListingsRentalsScreen(currentUserId: _userId!),
                   ),
                 );
               }

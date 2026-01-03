@@ -41,6 +41,7 @@ class _ReturnItemFormState extends State<ReturnItemForm> {
   // Calculated values
   int _extraDays = 0;
   double _lateFee = 0;
+  int _totalDays = 0;
 
   final List<Map<String, String>> _conditionOptions = [
     {'value': 'excellent', 'label': 'Excellent'},
@@ -56,7 +57,17 @@ class _ReturnItemFormState extends State<ReturnItemForm> {
   }
 
   void _calculateExtraDays() {
+    final startDateStr = widget.request['startDate'];
     final endDateStr = widget.request['endDate'];
+
+    if (startDateStr != null) {
+      final startDate = DateTime.parse(startDateStr);
+      // Calculate total days from start date to return date
+      _totalDays =
+          _returnDate.difference(startDate).inDays +
+          1; // +1 to include both start and end day
+    }
+
     if (endDateStr != null) {
       final endDate = DateTime.parse(endDateStr);
       final diff = _returnDate.difference(endDate).inDays;
@@ -482,49 +493,144 @@ class _ReturnItemFormState extends State<ReturnItemForm> {
               color: _primaryBlue.withOpacity(0.1),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            child: Column(
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      'Expected Return',
-                      style: TextStyle(fontSize: 11, color: _mediumGrey),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Rent From Date',
+                          style: TextStyle(fontSize: 11, color: _mediumGrey),
+                        ),
+                        Text(
+                          widget.request['startDate'] != null
+                              ? DateFormat(
+                                  'dd MMM yyyy',
+                                ).format(
+                                  DateTime.parse(widget.request['startDate']),
+                                )
+                              : 'N/A',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
                     ),
-                    Text(
-                      widget.request['endDate'] != null
-                          ? DateFormat(
-                              'dd MMM yyyy',
-                            ).format(DateTime.parse(widget.request['endDate']))
-                          : 'N/A',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                      ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          'Total Days',
+                          style: TextStyle(fontSize: 11, color: _mediumGrey),
+                        ),
+                        Text(
+                          '$_totalDays days',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                            color: _primaryBlue,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
+                SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      'Rental Amount',
-                      style: TextStyle(fontSize: 11, color: _mediumGrey),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Expected Return',
+                          style: TextStyle(fontSize: 11, color: _mediumGrey),
+                        ),
+                        Text(
+                          widget.request['endDate'] != null
+                              ? DateFormat(
+                                  'dd MMM yyyy',
+                                ).format(
+                                  DateTime.parse(widget.request['endDate']),
+                                )
+                              : 'N/A',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
                     ),
-                    Text(
-                      '₹${widget.request['totalAmount'] ?? 0}',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        color: _primaryBlue,
-                      ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          'Rental Amount',
+                          style: TextStyle(fontSize: 11, color: _mediumGrey),
+                        ),
+                        Text(
+                          '₹${widget.request['totalAmount'] ?? 0}',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            color: _primaryBlue,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ],
             ),
           ),
+          // Extended rental alert
+          if (_extraDays > 0) ...[
+            SizedBox(height: 12),
+            Container(
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: Colors.red.withOpacity(0.3),
+                  width: 1.5,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.error_outline, color: Colors.red, size: 24),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '⚠️ Rental Period Extended',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.red[800],
+                            fontSize: 14,
+                          ),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'This rental has been extended by $_extraDays day(s) beyond the expected return date.',
+                          style: TextStyle(
+                            color: Colors.red[700],
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
