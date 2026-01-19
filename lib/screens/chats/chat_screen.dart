@@ -1,6 +1,10 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:rentmate/services/socket_service.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
+import 'package:rentmate/services/socket_service.dart';
+import 'package:rentmate/theme/app_colors.dart';
 import 'dart:convert';
 import 'dart:async';
 import 'package:rentmate/constants.dart';
@@ -10,7 +14,7 @@ class ChatScreen extends StatefulWidget {
   final String currentUserId;
   final String otherUserName;
   final String itemName;
-  final String? chatId; // Optional
+  final String? chatId;
 
   const ChatScreen({
     required this.requestId,
@@ -30,15 +34,31 @@ class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final FocusNode _focusNode = FocusNode();
+  final ImagePicker _imagePicker = ImagePicker();
 
   List<Message> messages = [];
   bool isLoading = true;
   bool isSending = false;
+  bool isUploadingImage = false;
   String? errorMessage;
   bool hasConnectionError = false;
   StreamSubscription? _connectionSubscription;
   bool isSelfChat = false;
   String? _currentChatId;
+
+  // Rent request details
+  String _requestStatus = 'unknown';
+  DateTime? _startDate;
+  DateTime? _endDate;
+  bool _isRenter = false;
+  bool _isAccepting = false;
+
+  // Design colors
+  static const Color _sentBubbleColor = Color(0xFF1C1C1E); // Black/dark
+  static const Color _sentTextColor = Colors.white;
+  static const Color _receivedBubbleColor = Color(0xFF1C1C1E); // Black/dark
+  static const Color _receivedTextColor = Colors.white;
+  static const Color _timestampColor = Color(0xFF9E9E9E);
 
   @override
   void initState() {
@@ -71,65 +91,13 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _markMessagesAsRead() async {
     try {
-      print(
-        '🔷 [ChatScreen] Marking messages as read for request: ${widget.requestId}',
-      );
-      final response = await http.put(
+      await http.put(
         Uri.parse('$kBaseUrl/chat/request/${widget.requestId}/read'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'userId': widget.currentUserId}),
       );
-      if (response.statusCode == 200) {
-        print('✅ [ChatScreen] Messages marked as read');
-      } else {
-        print('❌ [ChatScreen] Failed to mark as read: ${response.body}');
-      }
     } catch (e) {
-      print('❌ [ChatScreen] Error marking messages as read: $e');
-    }
-  }
-
-  Future<void> _deleteChat() async {
-    if (_currentChatId == null) return;
-
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Delete Chat'),
-        content: Text('Are you sure you want to delete this chat history?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text('Delete', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm != true) return;
-
-    try {
-      final response = await http.delete(
-        Uri.parse('$kBaseUrl/chat/$_currentChatId'),
-      );
-
-      if (response.statusCode == 200) {
-        if (!mounted) return;
-        Navigator.pop(context);
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to delete chat')),
-        );
-      }
-    } catch (e) {
-      print('Error deleting chat: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error deleting chat')),
-      );
+      print('Error marking messages as read: $e');
     }
   }
 
@@ -168,20 +136,11 @@ class _ChatScreenState extends State<ChatScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Message deleted')),
         );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to delete message')),
-        );
       }
     } catch (e) {
       print('Error deleting message: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error deleting message')),
-      );
     }
   }
-
-  // ... existing code ...
 
   Future<void> _checkRequestDetails() async {
     try {
@@ -198,13 +157,18 @@ class _ChatScreenState extends State<ChatScreen> {
             ? data['renterId']['_id']
             : data['renterId'];
 
-        // If the backend allows it (e.g. legacy data) or if someone bypassed checks,
-        // we might find that customerId == renterId, OR we are chatting with ourselves
-        // if both participants are the same user (unlikely unless self-rent),
-        // OR simply if we want to flag it.
-        // The most direct "self chat" check is:
-        if (customerId.toString() == renterId.toString()) {
-          setState(() => isSelfChat = true);
+        if (mounted) {
+          setState(() {
+            isSelfChat = customerId.toString() == renterId.toString();
+            _requestStatus = data['status'] ?? 'unknown';
+            _isRenter = renterId.toString() == widget.currentUserId;
+            if (data['startDate'] != null) {
+              _startDate = DateTime.parse(data['startDate']);
+            }
+            if (data['endDate'] != null) {
+              _endDate = DateTime.parse(data['endDate']);
+            }
+          });
         }
       }
     } catch (e) {
@@ -212,13 +176,89 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  void _initializeChat() {
-    print('🔷 [ChatScreen] Initializing chat for request: ${widget.requestId}');
+  Future<void> _acceptRequest() async {
+    setState(() => _isAccepting = true);
+    try {
+      final response = await http.put(
+        Uri.parse('$kBaseUrl/rent-request/${widget.requestId}/status'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'status': 'accepted'}),
+      );
 
-    // Connect to socket
+      if (response.statusCode == 200) {
+        setState(() => _requestStatus = 'accepted');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Request accepted!'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to accept request'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error accepting request: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    } finally {
+      setState(() => _isAccepting = false);
+    }
+  }
+
+  Future<void> _rejectRequest() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Reject Request'),
+        content: Text('Are you sure you want to reject this rental request?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text('Reject', style: TextStyle(color: AppColors.error)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() => _isAccepting = true);
+    try {
+      final response = await http.put(
+        Uri.parse('$kBaseUrl/rent-request/${widget.requestId}/status'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'status': 'rejected'}),
+      );
+
+      if (response.statusCode == 200) {
+        setState(() => _requestStatus = 'rejected');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Request rejected')),
+        );
+      }
+    } catch (e) {
+      print('Error rejecting request: $e');
+    } finally {
+      setState(() => _isAccepting = false);
+    }
+  }
+
+  void _initializeChat() {
     _socketService.connect();
 
-    // Listen to connection status events
     _connectionSubscription = _socketService.connectionStatus.listen((
       isConnected,
     ) {
@@ -256,10 +296,9 @@ class _ChatScreenState extends State<ChatScreen> {
           isLoading = false;
         });
         _scrollToBottom();
-        // Mark messages as read when chat history is loaded
         _markMessagesAsRead();
       } catch (e) {
-        print('❌ [ChatScreen] Error processing chat history: $e');
+        print('Error processing chat history: $e');
         setState(() => isLoading = false);
       }
     });
@@ -273,12 +312,11 @@ class _ChatScreenState extends State<ChatScreen> {
           isSending = false;
         });
         _scrollToBottom();
-        // Mark messages as read when new message arrives (if from other user)
         if (newMessage.senderId != widget.currentUserId) {
           _markMessagesAsRead();
         }
       } catch (e) {
-        print('❌ [ChatScreen] Error parsing new message: $e');
+        print('Error parsing new message: $e');
       }
     });
 
@@ -336,6 +374,71 @@ class _ChatScreenState extends State<ChatScreen> {
     _focusNode.requestFocus();
   }
 
+  Future<void> _pickAndSendImage() async {
+    final pickedFile = await _imagePicker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 70,
+    );
+
+    if (pickedFile == null) return;
+
+    setState(() => isUploadingImage = true);
+
+    try {
+      final uri = Uri.parse('$kBaseUrl/upload');
+      final request = http.MultipartRequest('POST', uri);
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          'image',
+          pickedFile.path,
+          contentType: MediaType('image', 'jpeg'),
+        ),
+      );
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final imageUrl = data['url'];
+
+        _socketService.sendMessage(
+          widget.requestId,
+          widget.currentUserId,
+          '',
+          imageUrl: imageUrl,
+          messageType: 'image',
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to upload image'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error uploading image: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error uploading image'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    } finally {
+      setState(() => isUploadingImage = false);
+    }
+  }
+
+  void _showFullScreenImage(String imageUrl) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => FullScreenImageView(imageUrl: imageUrl),
+      ),
+    );
+  }
+
   void _retryConnection() {
     setState(() {
       isLoading = true;
@@ -348,91 +451,269 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.grey[100],
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 1,
-        title: Row(
-          children: [
-            CircleAvatar(
-              backgroundColor: Colors.blue[100],
-              radius: 18,
-              child: Text(
-                widget.otherUserName.isNotEmpty
-                    ? widget.otherUserName[0].toUpperCase()
-                    : '?',
-                style: TextStyle(color: Colors.blue[800], fontSize: 14),
-              ),
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: AppColors.backgroundGradient,
+      ),
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          leading: IconButton(
+            icon: Icon(
+              Icons.arrow_back_ios_new_rounded,
+              color: AppColors.textPrimary,
             ),
-            SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.otherUserName,
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            onPressed: () => Navigator.pop(context),
+          ),
+          title: Row(
+            children: [
+              // Avatar
+              CircleAvatar(
+                backgroundColor: _sentBubbleColor,
+                radius: 20,
+                child: Text(
+                  widget.otherUserName.isNotEmpty
+                      ? widget.otherUserName[0].toUpperCase()
+                      : '?',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
                   ),
-                  Text(
-                    widget.itemName,
-                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                    overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.otherUserName,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    Text(
+                      widget.itemName,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            // Connection indicator
+            Padding(
+              padding: const EdgeInsets.only(right: 16),
+              child: Center(
+                child: Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: _socketService.isConnected
+                        ? AppColors.success
+                        : AppColors.error,
                   ),
-                ],
+                ),
               ),
             ),
           ],
         ),
-        actions: [
-          // if (_currentChatId != null)
-          //   IconButton(
-          //     icon: Icon(Icons.delete_outline, color: Colors.red),
-          //     onPressed: _deleteChat,
-          //   ),
-          Container(
-            margin: EdgeInsets.symmetric(horizontal: 16),
-            width: 10,
-            height: 10,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: _socketService.isConnected ? Colors.green : Colors.red,
-            ),
+        body: Column(
+          children: [
+            if (isSelfChat)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  vertical: 8,
+                  horizontal: 16,
+                ),
+                color: AppColors.warning.withOpacity(0.1),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.info_outline,
+                      size: 18,
+                      color: AppColors.warning,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Self-Chat Mode',
+                      style: TextStyle(color: AppColors.warning, fontSize: 13),
+                    ),
+                  ],
+                ),
+              ),
+            if (hasConnectionError && errorMessage != null)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(8),
+                color: AppColors.error.withOpacity(0.1),
+                child: Text(
+                  errorMessage!,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: AppColors.error, fontSize: 12),
+                ),
+              ),
+            _buildStatusHeader(),
+            Expanded(child: _buildMessagesList()),
+            _buildInputField(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatusHeader() {
+    if (_requestStatus == 'unknown') return const SizedBox.shrink();
+
+    Color statusColor;
+    String statusLabel;
+
+    switch (_requestStatus) {
+      case 'pending':
+        statusColor = Colors.orange;
+        statusLabel = 'Pending Request';
+        break;
+      case 'accepted':
+        statusColor = Colors.blue;
+        statusLabel = 'Request Accepted';
+        break;
+      case 'rejected':
+        statusColor = AppColors.error;
+        statusLabel = 'Request Rejected';
+        break;
+      case 'active':
+        statusColor = AppColors.success;
+        statusLabel = 'Active Rental';
+        break;
+      case 'completed':
+        statusColor = AppColors.primaryTeal;
+        statusLabel = 'Completed';
+        break;
+      case 'cancelled':
+        statusColor = Colors.grey;
+        statusLabel = 'Cancelled';
+        break;
+      default:
+        statusColor = Colors.grey;
+        statusLabel = _requestStatus;
+    }
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            offset: const Offset(0, 2),
+            blurRadius: 4,
           ),
         ],
       ),
-      body: Column(
+      child: Column(
         children: [
-          if (isSelfChat)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: statusColor.withOpacity(0.5)),
+                  ),
+                  child: Text(
+                    statusLabel,
+                    style: TextStyle(
+                      color: statusColor,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                if (_startDate != null && _endDate != null)
+                  Row(
+                    children: [
+                      Icon(Icons.calendar_today, size: 14, color: Colors.grey),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${_startDate!.day}/${_startDate!.month} - ${_endDate!.day}/${_endDate!.month}',
+                        style: TextStyle(
+                          color: Colors.grey.shade700,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+              ],
+            ),
+          ),
+
+          // Show actions only for renter (owner) when pending
+          if (_isRenter && _requestStatus == 'pending')
             Container(
-              width: double.infinity,
-              padding: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-              color: Colors.amber[100],
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
               child: Row(
                 children: [
-                  Icon(Icons.info_outline, size: 20, color: Colors.amber[900]),
-                  SizedBox(width: 8),
-                  Text(
-                    'You are verifying the chat feature (Self-Chat)',
-                    style: TextStyle(color: Colors.amber[900], fontSize: 13),
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _isAccepting ? null : _rejectRequest,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.error,
+                        side: BorderSide(color: AppColors.error),
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 0,
+                        ), // Slimmer
+                        minimumSize: const Size(0, 36),
+                      ),
+                      child: const Text('Reject'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: _isAccepting ? null : _acceptRequest,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primaryTeal,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 0),
+                        minimumSize: const Size(0, 36),
+                        elevation: 0,
+                      ),
+                      child: _isAccepting
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Text('Accept Request'),
+                    ),
                   ),
                 ],
               ),
             ),
-          if (hasConnectionError && errorMessage != null)
-            Container(
-              width: double.infinity,
-              padding: EdgeInsets.all(8),
-              color: Colors.red[100],
-              child: Text(
-                errorMessage!,
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.red[900]),
-              ),
-            ),
-          Expanded(child: _buildMessagesList()),
-          _buildInputField(),
         ],
       ),
     );
@@ -440,7 +721,9 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _buildMessagesList() {
     if (isLoading) {
-      return Center(child: CircularProgressIndicator());
+      return Center(
+        child: CircularProgressIndicator(color: AppColors.primaryTeal),
+      );
     }
 
     if (messages.isEmpty) {
@@ -448,9 +731,21 @@ class _ChatScreenState extends State<ChatScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.chat_bubble_outline, size: 64, color: Colors.grey[300]),
-            SizedBox(height: 16),
-            Text('No messages yet', style: TextStyle(color: Colors.grey)),
+            Icon(
+              Icons.chat_bubble_outline_rounded,
+              size: 64,
+              color: Colors.grey.shade300,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'No messages yet',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 16),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Start the conversation!',
+              style: TextStyle(color: AppColors.textLight, fontSize: 14),
+            ),
           ],
         ),
       );
@@ -458,132 +753,353 @@ class _ChatScreenState extends State<ChatScreen> {
 
     return ListView.builder(
       controller: _scrollController,
-      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       itemCount: messages.length,
       itemBuilder: (context, index) {
         final message = messages[index];
         final isMe = message.senderId == widget.currentUserId;
 
-        // Show date if needed
-        bool showDate = false;
+        // Check if we should show date divider
+        bool showDateDivider = false;
         if (index == 0) {
-          showDate = true;
+          showDateDivider = true;
         } else {
-          final prevDate = messages[index - 1].timestamp;
-          final currDate = message.timestamp;
-          if (prevDate.day != currDate.day ||
-              prevDate.month != currDate.month ||
-              prevDate.year != currDate.year) {
-            showDate = true;
-          }
+          showDateDivider = _shouldShowDateDivider(
+            messages[index - 1].timestamp,
+            message.timestamp,
+          );
         }
 
-        return GestureDetector(
-          onLongPress: () {
-            if (isMe) {
-              _deleteMessage(message.messageId);
-            }
-          },
-          child: Column(
-            children: [
-              if (showDate) _buildDateDivider(message.timestamp),
-              Align(
-                alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-                child: Container(
-                  margin: EdgeInsets.only(
-                    bottom: 8,
-                    left: isMe ? 50 : 0,
-                    right: isMe ? 0 : 50,
-                  ),
-                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: isMe ? Colors.black : Colors.white,
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(20),
-                      topRight: Radius.circular(20),
-                      bottomLeft: isMe
-                          ? Radius.circular(20)
-                          : Radius.circular(4),
-                      bottomRight: isMe
-                          ? Radius.circular(4)
-                          : Radius.circular(20),
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
-                        blurRadius: 5,
-                        offset: Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        message.text,
-                        style: TextStyle(
-                          color: isMe ? Colors.white : Colors.black87,
-                          fontSize: 15,
-                        ),
-                      ),
-                      SizedBox(height: 4),
-                      Text(
-                        _formatTime(message.timestamp),
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: isMe ? Colors.white54 : Colors.grey[500],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
+        return Column(
+          children: [
+            if (showDateDivider) _buildDateDivider(message.timestamp),
+            GestureDetector(
+              onLongPress: () {
+                if (isMe) _deleteMessage(message.messageId);
+              },
+              child: message.messageType == 'image'
+                  ? _buildImageMessage(message, isMe)
+                  : _buildTextMessage(message, isMe),
+            ),
+          ],
         );
       },
     );
   }
 
+  bool _shouldShowDateDivider(DateTime prev, DateTime curr) {
+    return prev.year != curr.year ||
+        prev.month != curr.month ||
+        prev.day != curr.day;
+  }
+
+  Widget _buildTextMessage(Message message, bool isMe) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Row(
+        mainAxisAlignment: isMe
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          // Avatar for received messages
+          if (!isMe) ...[
+            CircleAvatar(
+              backgroundColor: _sentBubbleColor,
+              radius: 16,
+              child: Text(
+                widget.otherUserName.isNotEmpty
+                    ? widget.otherUserName[0].toUpperCase()
+                    : '?',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+          ],
+
+          // Message content
+          Flexible(
+            child: Column(
+              crossAxisAlignment: isMe
+                  ? CrossAxisAlignment.end
+                  : CrossAxisAlignment.start,
+              children: [
+                // Bubble
+                Container(
+                  constraints: BoxConstraints(
+                    maxWidth: MediaQuery.of(context).size.width * 0.65,
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isMe ? _sentBubbleColor : _receivedBubbleColor,
+                    borderRadius: BorderRadius.only(
+                      topLeft: const Radius.circular(20),
+                      topRight: const Radius.circular(20),
+                      bottomLeft: isMe
+                          ? const Radius.circular(20)
+                          : const Radius.circular(4),
+                      bottomRight: isMe
+                          ? const Radius.circular(4)
+                          : const Radius.circular(20),
+                    ),
+                  ),
+                  child: Text(
+                    message.text,
+                    style: TextStyle(
+                      color: isMe ? _sentTextColor : _receivedTextColor,
+                      fontSize: 15,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+
+                // Timestamp below bubble
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    _formatTime(message.timestamp),
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: _timestampColor,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildImageMessage(Message message, bool isMe) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Row(
+        mainAxisAlignment: isMe
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          // Avatar for received messages
+          if (!isMe) ...[
+            CircleAvatar(
+              backgroundColor: _sentBubbleColor,
+              radius: 16,
+              child: Text(
+                widget.otherUserName.isNotEmpty
+                    ? widget.otherUserName[0].toUpperCase()
+                    : '?',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+          ],
+
+          // Image content
+          Flexible(
+            child: Column(
+              crossAxisAlignment: isMe
+                  ? CrossAxisAlignment.end
+                  : CrossAxisAlignment.start,
+              children: [
+                GestureDetector(
+                  onTap: () {
+                    if (message.imageUrl != null) {
+                      _showFullScreenImage(message.imageUrl!);
+                    }
+                  },
+                  child: Container(
+                    constraints: BoxConstraints(
+                      maxWidth: MediaQuery.of(context).size.width * 0.65,
+                    ),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: isMe ? _sentBubbleColor : _receivedBubbleColor,
+                        width: 3,
+                      ),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(13),
+                      child: Image.network(
+                        message.imageUrl ?? '',
+                        width: 200,
+                        height: 200,
+                        fit: BoxFit.cover,
+                        loadingBuilder: (context, child, loadingProgress) {
+                          if (loadingProgress == null) return child;
+                          return Container(
+                            width: 200,
+                            height: 200,
+                            color: Colors.grey.shade100,
+                            child: Center(
+                              child: CircularProgressIndicator(
+                                value:
+                                    loadingProgress.expectedTotalBytes != null
+                                    ? loadingProgress.cumulativeBytesLoaded /
+                                          loadingProgress.expectedTotalBytes!
+                                    : null,
+                                color: AppColors.primaryTeal,
+                                strokeWidth: 2,
+                              ),
+                            ),
+                          );
+                        },
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            width: 200,
+                            height: 200,
+                            color: Colors.grey.shade100,
+                            child: Icon(
+                              Icons.broken_image_outlined,
+                              color: AppColors.textLight,
+                              size: 48,
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+
+                // Timestamp below image
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    _formatTime(message.timestamp),
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: _timestampColor,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildDateDivider(DateTime date) {
     return Padding(
-      padding: EdgeInsets.symmetric(vertical: 16),
+      padding: const EdgeInsets.symmetric(vertical: 16),
       child: Center(
         child: Container(
-          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
           decoration: BoxDecoration(
-            color: Colors.grey[200],
-            borderRadius: BorderRadius.circular(12),
+            color: Colors.grey.shade600.withOpacity(0.7),
+            borderRadius: BorderRadius.circular(16),
           ),
           child: Text(
-            '${date.day}/${date.month}',
-            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+            _formatDateDivider(date),
+            style: const TextStyle(
+              fontSize: 12,
+              color: Colors.white,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ),
       ),
     );
   }
 
+  String _formatDateDivider(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final messageDate = DateTime(date.year, date.month, date.day);
+
+    if (messageDate == today) {
+      return 'Today';
+    } else if (messageDate == yesterday) {
+      return 'Yesterday';
+    } else if (now.difference(date).inDays < 7) {
+      // Within last week - show day name
+      const days = [
+        'Monday',
+        'Tuesday',
+        'Wednesday',
+        'Thursday',
+        'Friday',
+        'Saturday',
+        'Sunday',
+      ];
+      return days[date.weekday - 1];
+    } else {
+      // Older - show full date
+      const months = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec',
+      ];
+      return '${date.day} ${months[date.month - 1]} ${date.year}';
+    }
+  }
+
   Widget _buildInputField() {
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            offset: Offset(0, -2),
-            blurRadius: 10,
-            color: Colors.black.withOpacity(0.05),
-          ),
-        ],
+        color: Colors.white.withOpacity(0.9),
+        border: Border(top: BorderSide(color: Colors.grey.shade200)),
       ),
       child: SafeArea(
         child: Row(
           children: [
+            // Image picker button
+            GestureDetector(
+              onTap: isUploadingImage ? null : _pickAndSendImage,
+              child: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  shape: BoxShape.circle,
+                ),
+                child: isUploadingImage
+                    ? SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppColors.primaryTeal,
+                        ),
+                      )
+                    : Icon(
+                        Icons.camera_alt_outlined,
+                        color: AppColors.textSecondary,
+                        size: 20,
+                      ),
+              ),
+            ),
+            const SizedBox(width: 12),
+
+            // Text input
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
-                  color: Colors.grey[100],
+                  color: Colors.grey.shade100,
                   borderRadius: BorderRadius.circular(24),
                 ),
                 child: TextField(
@@ -591,8 +1107,9 @@ class _ChatScreenState extends State<ChatScreen> {
                   focusNode: _focusNode,
                   decoration: InputDecoration(
                     hintText: 'Type a message...',
+                    hintStyle: TextStyle(color: AppColors.textLight),
                     border: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(
+                    contentPadding: const EdgeInsets.symmetric(
                       horizontal: 20,
                       vertical: 10,
                     ),
@@ -602,24 +1119,27 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
               ),
             ),
-            SizedBox(width: 12),
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.black,
-                shape: BoxShape.circle,
-              ),
-              child: IconButton(
-                icon: isSending
+            const SizedBox(width: 12),
+
+            // Send button
+            GestureDetector(
+              onTap: _sendMessage,
+              child: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: _sentBubbleColor,
+                  shape: BoxShape.circle,
+                ),
+                child: isSending
                     ? SizedBox(
-                        width: 16,
-                        height: 16,
+                        width: 20,
+                        height: 20,
                         child: CircularProgressIndicator(
                           color: Colors.white,
                           strokeWidth: 2,
                         ),
                       )
-                    : Icon(Icons.send, color: Colors.white, size: 20),
-                onPressed: _sendMessage,
+                    : Icon(Icons.send_rounded, color: Colors.white, size: 20),
               ),
             ),
           ],
@@ -633,16 +1153,63 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 }
 
+// Full screen image viewer
+class FullScreenImageView extends StatelessWidget {
+  final String imageUrl;
+
+  const FullScreenImageView({Key? key, required this.imageUrl})
+    : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        elevation: 0,
+      ),
+      body: Center(
+        child: InteractiveViewer(
+          panEnabled: true,
+          minScale: 0.5,
+          maxScale: 4,
+          child: Image.network(
+            imageUrl,
+            fit: BoxFit.contain,
+            loadingBuilder: (context, child, loadingProgress) {
+              if (loadingProgress == null) return child;
+              return Center(
+                child: CircularProgressIndicator(
+                  value: loadingProgress.expectedTotalBytes != null
+                      ? loadingProgress.cumulativeBytesLoaded /
+                            loadingProgress.expectedTotalBytes!
+                      : null,
+                  color: AppColors.primaryTeal,
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class Message {
   final String messageId;
   final String senderId;
   final String text;
+  final String messageType;
+  final String? imageUrl;
   final DateTime timestamp;
 
   Message({
     this.messageId = '',
     required this.senderId,
     required this.text,
+    this.messageType = 'text',
+    this.imageUrl,
     required this.timestamp,
   });
 
@@ -651,6 +1218,8 @@ class Message {
       messageId: json['_id'] ?? '',
       senderId: json['senderId'] ?? '',
       text: json['text'] ?? '',
+      messageType: json['messageType'] ?? 'text',
+      imageUrl: json['imageUrl'],
       timestamp: DateTime.parse(
         json['timestamp'] ?? DateTime.now().toIso8601String(),
       ),

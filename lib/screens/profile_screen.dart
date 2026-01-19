@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:developer';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:rentmate/constants.dart';
@@ -7,6 +8,8 @@ import 'package:rentmate/screens/edit_profile_screen.dart';
 import 'package:rentmate/screens/login_screen.dart';
 import 'package:rentmate/screens/my_rentals_screen.dart';
 import 'package:rentmate/screens/my_listings_rentals_screen.dart';
+import 'package:rentmate/theme/app_colors.dart';
+import 'package:rentmate/widgets/glassmorphic_container.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -20,12 +23,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Map<String, dynamic>? _userData;
   bool _isLoading = true;
   String? _userId;
-
-  // Color scheme - matching app design
-  static const Color _primaryBlue = Color(0xFF2563EB);
-  static const Color _darkSlate = Color(0xFF1E293B);
-  static const Color _lightGrey = Color(0xFFF1F5F9);
-  static const Color _mediumGrey = Color(0xFF64748B);
 
   @override
   void initState() {
@@ -79,9 +76,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _lightGrey,
+      backgroundColor: Colors.transparent,
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: _primaryBlue))
+          ? Center(
+              child: CircularProgressIndicator(color: AppColors.primaryTeal),
+            )
           : CustomScrollView(
               slivers: [
                 // Header with profile info
@@ -91,6 +90,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 // Menu items
                 SliverToBoxAdapter(
                   child: _buildMenuSection(),
+                ),
+                const SliverToBoxAdapter(
+                  child: SizedBox(height: 100),
                 ),
               ],
             ),
@@ -105,40 +107,41 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     return Container(
       padding: const EdgeInsets.fromLTRB(24, 60, 24, 32),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
       child: Column(
         children: [
-          // Profile Image
+          // Profile Image with gradient border
           Stack(
             children: [
               Container(
-                width: 100,
-                height: 100,
+                width: 110,
+                height: 110,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: _primaryBlue.withOpacity(0.1),
-                  border: Border.all(
-                    color: _primaryBlue.withOpacity(0.2),
-                    width: 3,
-                  ),
+                  gradient: AppColors.primaryGradient,
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primaryTeal.withOpacity(0.3),
+                      blurRadius: 20,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
                 ),
-                child: ClipOval(
-                  child: profileImage != null && profileImage.isNotEmpty
-                      ? Image.network(
-                          profileImage,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => _buildInitials(name),
-                        )
-                      : _buildInitials(name),
+                padding: const EdgeInsets.all(3),
+                child: Container(
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white,
+                  ),
+                  padding: const EdgeInsets.all(3),
+                  child: ClipOval(
+                    child: profileImage != null && profileImage.isNotEmpty
+                        ? Image.network(
+                            profileImage,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => _buildInitials(name),
+                          )
+                        : _buildInitials(name),
+                  ),
                 ),
               ),
               Positioned(
@@ -147,12 +150,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: GestureDetector(
                   onTap: _navigateToEditProfile,
                   child: Container(
-                    width: 32,
-                    height: 32,
+                    width: 36,
+                    height: 36,
                     decoration: BoxDecoration(
-                      color: _primaryBlue,
+                      gradient: AppColors.primaryGradient,
                       shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 2),
+                      border: Border.all(color: Colors.white, width: 3),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primaryTeal.withOpacity(0.3),
+                          blurRadius: 8,
+                        ),
+                      ],
                     ),
                     child: const Icon(
                       Icons.camera_alt_outlined,
@@ -165,15 +174,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ],
           ),
 
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
 
           // Name
           Text(
             name,
             style: const TextStyle(
-              fontSize: 24,
+              fontSize: 26,
               fontWeight: FontWeight.bold,
-              color: _darkSlate,
+              color: AppColors.textPrimary,
             ),
           ),
 
@@ -182,9 +191,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           // Email
           Text(
             email,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 14,
-              color: _mediumGrey,
+              color: AppColors.textSecondary,
             ),
           ),
 
@@ -197,33 +206,54 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Icon(
                   Icons.location_on_outlined,
                   size: 16,
-                  color: _mediumGrey.withOpacity(0.7),
+                  color: AppColors.primaryTeal,
                 ),
                 const SizedBox(width: 4),
                 Text(
                   location,
                   style: TextStyle(
                     fontSize: 13,
-                    color: _mediumGrey.withOpacity(0.8),
+                    color: AppColors.textSecondary,
                   ),
                 ),
               ],
             ),
           ],
 
-          const SizedBox(height: 20),
+          const SizedBox(height: 24),
 
-          // Edit Profile Button
-          OutlinedButton.icon(
-            onPressed: _navigateToEditProfile,
-            icon: const Icon(Icons.edit_outlined, size: 18),
-            label: const Text('Edit Profile'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: _primaryBlue,
-              side: const BorderSide(color: _primaryBlue),
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
-              shape: RoundedRectangleBorder(
+          // Edit Profile Button with gradient outline
+          Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              gradient: AppColors.primaryGradient,
+            ),
+            padding: const EdgeInsets.all(2),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
                 borderRadius: BorderRadius.circular(10),
+              ),
+              child: TextButton.icon(
+                onPressed: _navigateToEditProfile,
+                icon: Icon(
+                  Icons.edit_outlined,
+                  size: 18,
+                  color: AppColors.primaryTeal,
+                ),
+                label: Text(
+                  'Edit Profile',
+                  style: TextStyle(
+                    color: AppColors.primaryTeal,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 10,
+                  ),
+                ),
               ),
             ),
           ),
@@ -234,50 +264,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildInitials(String name) {
     final initials = name.isNotEmpty ? name[0].toUpperCase() : '?';
-    return Center(
-      child: Text(
-        initials,
-        style: const TextStyle(
-          fontSize: 36,
-          fontWeight: FontWeight.bold,
-          color: _primaryBlue,
+    return Container(
+      color: AppColors.backgroundLight,
+      child: Center(
+        child: Text(
+          initials,
+          style: const TextStyle(
+            fontSize: 36,
+            fontWeight: FontWeight.bold,
+            color: AppColors.primaryTeal,
+          ),
         ),
       ),
     );
   }
 
   Widget _buildMenuSection() {
-    return Container(
-      margin: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
+    return GlassmorphicContainer(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      borderRadius: 20,
+      backgroundColor: Colors.white.withOpacity(0.85),
       child: Column(
         children: [
-          // _buildMenuItem(
-          //   icon: Icons.inventory_2_outlined,
-          //   title: 'My Rentals',
-          //   subtitle: 'View items you\'re renting',
-          //   onTap: () {
-          //     if (_userId != null) {
-          //       Navigator.push(
-          //         context,
-          //         MaterialPageRoute(
-          //           builder: (_) => MyAddsListPage(currentUserId: _userId!),
-          //         ),
-          //       );
-          //     }
-          //   },
-          // ),
-          _buildDivider(),
           _buildMenuItem(
             icon: Icons.shopping_bag_outlined,
             title: 'My Rentals',
@@ -315,7 +324,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             icon: Icons.privacy_tip_outlined,
             title: 'Privacy & Terms',
             subtitle: 'Read our policies',
-            onTap: () => _showMessage('Privacy policy coming soon!'),
+            onTap: () =>
+                _showMessage('Privacy policy coming soon!', isError: false),
           ),
           _buildDivider(),
           _buildMenuItem(
@@ -326,7 +336,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           _buildDivider(),
           _buildMenuItem(
-            icon: Icons.logout,
+            icon: Icons.logout_rounded,
             title: 'Log Out',
             subtitle: 'Sign out of your account',
             isDestructive: true,
@@ -344,27 +354,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
     required VoidCallback onTap,
     bool isDestructive = false,
   }) {
-    final color = isDestructive ? Colors.red.shade600 : _darkSlate;
+    final color = isDestructive ? AppColors.error : AppColors.textPrimary;
 
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         child: Row(
           children: [
             Container(
-              width: 44,
-              height: 44,
+              width: 46,
+              height: 46,
               decoration: BoxDecoration(
-                color: isDestructive
-                    ? Colors.red.shade50
-                    : _primaryBlue.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(10),
+                gradient: isDestructive
+                    ? LinearGradient(
+                        colors: [
+                          AppColors.error.withOpacity(0.1),
+                          AppColors.error.withOpacity(0.05),
+                        ],
+                      )
+                    : LinearGradient(
+                        colors: [
+                          AppColors.primaryTeal.withOpacity(0.1),
+                          AppColors.primaryTealLight.withOpacity(0.05),
+                        ],
+                      ),
+                borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(
                 icon,
-                color: isDestructive ? Colors.red.shade600 : _primaryBlue,
+                color: isDestructive ? AppColors.error : AppColors.primaryTeal,
                 size: 22,
               ),
             ),
@@ -386,15 +405,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     subtitle,
                     style: TextStyle(
                       fontSize: 13,
-                      color: _mediumGrey.withOpacity(0.8),
+                      color: AppColors.textSecondary,
                     ),
                   ),
                 ],
               ),
             ),
             Icon(
-              Icons.chevron_right,
-              color: _mediumGrey.withOpacity(0.5),
+              Icons.chevron_right_rounded,
+              color: AppColors.textLight,
             ),
           ],
         ),
@@ -406,7 +425,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Divider(
       height: 1,
       thickness: 1,
-      indent: 74,
+      indent: 76,
       color: Colors.grey.shade100,
     );
   }
@@ -415,13 +434,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('Log Out'),
         content: const Text('Are you sure you want to log out?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: Text(
+              'Cancel',
+              style: TextStyle(color: AppColors.textSecondary),
+            ),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -429,7 +451,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               await _logout();
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red.shade600,
+              backgroundColor: AppColors.error,
               foregroundColor: Colors.white,
             ),
             child: const Text('Log Out'),
@@ -460,24 +482,46 @@ class _ProfileScreenState extends State<ProfileScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('About RentMate'),
-        content: const Column(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                gradient: AppColors.primaryGradient,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.handshake, color: Colors.white, size: 24),
+            ),
+            const SizedBox(width: 12),
+            const Text('About RentMate'),
+          ],
+        ),
+        content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Version 1.0.0'),
-            SizedBox(height: 8),
+            Text(
+              'Version 1.0.0',
+              style: TextStyle(
+                color: AppColors.primaryTeal,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 12),
             Text(
               'RentMate is a peer-to-peer rental marketplace where you can rent items from others or list your own items for rent.',
-              style: TextStyle(color: Colors.grey),
+              style: TextStyle(color: AppColors.textSecondary),
             ),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
+            child: Text(
+              'Close',
+              style: TextStyle(color: AppColors.primaryTeal),
+            ),
           ),
         ],
       ),
@@ -491,7 +535,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         builder: (_) => EditProfileScreen(userData: _userData),
       ),
     );
-    // Reload profile if changes were saved
     if (result == true) {
       _loadProfile();
     }
@@ -502,11 +545,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: isError
-            ? Colors.orange.shade700
-            : Colors.green.shade600,
+        backgroundColor: isError ? AppColors.warning : AppColors.success,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         margin: const EdgeInsets.all(16),
       ),
     );

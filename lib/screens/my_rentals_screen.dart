@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:ui';
 import 'package:intl/intl.dart';
 import 'package:rentmate/constants.dart';
 import 'package:rentmate/screens/rental_details_screen.dart';
+import 'package:rentmate/theme/app_colors.dart';
 
 class MyRentalsScreen extends StatefulWidget {
   final String currentUserId;
@@ -18,21 +20,22 @@ class MyRentalsScreen extends StatefulWidget {
 class _MyRentalsScreenState extends State<MyRentalsScreen> {
   final String baseUrl = kBaseUrl;
 
-  // Color scheme
-  static const Color _primaryBlue = Color(0xFF2563EB);
-  static const Color _darkSlate = Color(0xFF1E293B);
-  static const Color _lightGrey = Color(0xFFF1F5F9);
-  static const Color _mediumGrey = Color(0xFF64748B);
-
   List<Map<String, dynamic>> _rentals = [];
   List<Map<String, dynamic>> _filteredRentals = [];
   bool _isLoading = true;
   String _searchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _fetchRentals();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _fetchRentals() async {
@@ -104,47 +107,107 @@ class _MyRentalsScreenState extends State<MyRentalsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _lightGrey,
-      appBar: AppBar(
-        backgroundColor: Colors.orange,
-        foregroundColor: Colors.white,
-        title: Text('My Rentals'),
-        elevation: 0,
-      ),
-      body: RefreshIndicator(
-        onRefresh: _fetchRentals,
-        color: _primaryBlue,
-        child: _isLoading
-            ? Center(child: CircularProgressIndicator(color: _primaryBlue))
-            : Column(
-                children: [
-                  // Search bar
-                  Container(
-                    padding: EdgeInsets.all(16),
-                    color: Colors.white,
-                    child: TextField(
-                      onChanged: _filterRentals,
-                      decoration: InputDecoration(
-                        hintText: 'Search rentals...',
-                        prefixIcon: Icon(Icons.search, color: _mediumGrey),
-                        filled: true,
-                        fillColor: _lightGrey,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
+      backgroundColor: AppColors.backgroundLight,
+      body: NestedScrollView(
+        headerSliverBuilder: (context, innerBoxIsScrolled) => [
+          SliverAppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            pinned: true,
+            floating: true,
+            toolbarHeight: 60,
+            flexibleSpace: ClipRect(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                child: Container(
+                  color: Colors.white.withOpacity(0.9),
+                ),
+              ),
+            ),
+            leading: IconButton(
+              icon: Icon(Icons.arrow_back, color: AppColors.textPrimary),
+              onPressed: () => Navigator.pop(context),
+            ),
+            title: Text(
+              'My Rentals',
+              style: TextStyle(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+              ),
+            ),
+            centerTitle: true,
+          ),
+        ],
+        body: RefreshIndicator(
+          onRefresh: _fetchRentals,
+          color: AppColors.primaryTeal,
+          child: _isLoading
+              ? Center(
+                  child: CircularProgressIndicator(
+                    color: AppColors.primaryTeal,
+                  ),
+                )
+              : Column(
+                  children: [
+                    // Search bar
+                    Container(
+                      padding: EdgeInsets.fromLTRB(16, 8, 16, 16),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(28),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.06),
+                              blurRadius: 12,
+                              offset: Offset(0, 4),
+                            ),
+                          ],
                         ),
-                        contentPadding: EdgeInsets.symmetric(vertical: 12),
+                        child: TextField(
+                          controller: _searchController,
+                          onChanged: _filterRentals,
+                          decoration: InputDecoration(
+                            hintText: 'Search rentals...',
+                            hintStyle: TextStyle(
+                              color: AppColors.textLight,
+                              fontSize: 14,
+                            ),
+                            prefixIcon: Icon(
+                              Icons.search_rounded,
+                              color: AppColors.textLight,
+                            ),
+                            suffixIcon: _searchController.text.isNotEmpty
+                                ? IconButton(
+                                    icon: Icon(
+                                      Icons.close,
+                                      color: AppColors.textLight,
+                                    ),
+                                    onPressed: () {
+                                      _searchController.clear();
+                                      _filterRentals('');
+                                    },
+                                  )
+                                : null,
+                            border: InputBorder.none,
+                            contentPadding: EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 14,
+                            ),
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                  // Rentals list
-                  Expanded(
-                    child: _filteredRentals.isEmpty
-                        ? _buildEmptyState()
-                        : _buildRentalsList(),
-                  ),
-                ],
-              ),
+                    // Rentals list
+                    Expanded(
+                      child: _filteredRentals.isEmpty
+                          ? _buildEmptyState()
+                          : _buildRentalsList(),
+                    ),
+                  ],
+                ),
+        ),
       ),
     );
   }
@@ -157,7 +220,7 @@ class _MyRentalsScreenState extends State<MyRentalsScreen> {
           Icon(
             Icons.shopping_bag_outlined,
             size: 80,
-            color: _mediumGrey.withOpacity(0.3),
+            color: AppColors.textSecondary.withOpacity(0.3),
           ),
           SizedBox(height: 16),
           Text(
@@ -165,7 +228,7 @@ class _MyRentalsScreenState extends State<MyRentalsScreen> {
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w600,
-              color: _mediumGrey,
+              color: AppColors.textSecondary,
             ),
           ),
           SizedBox(height: 8),
@@ -175,7 +238,7 @@ class _MyRentalsScreenState extends State<MyRentalsScreen> {
                 : 'Try a different search term',
             style: TextStyle(
               fontSize: 14,
-              color: _mediumGrey.withOpacity(0.7),
+              color: AppColors.textSecondary.withOpacity(0.7),
             ),
             textAlign: TextAlign.center,
           ),
@@ -275,7 +338,7 @@ class _MyRentalsScreenState extends State<MyRentalsScreen> {
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.bold,
-              color: _darkSlate,
+              color: AppColors.textPrimary,
             ),
           ),
           SizedBox(width: 8),
@@ -374,7 +437,7 @@ class _MyRentalsScreenState extends State<MyRentalsScreen> {
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.bold,
-                        color: _darkSlate,
+                        color: AppColors.textPrimary,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -385,7 +448,7 @@ class _MyRentalsScreenState extends State<MyRentalsScreen> {
                         '${DateFormat('dd MMM').format(startDate)} - ${DateFormat('dd MMM yyyy').format(endDate)}',
                         style: TextStyle(
                           fontSize: 12,
-                          color: _mediumGrey,
+                          color: AppColors.textSecondary,
                         ),
                       ),
                     SizedBox(height: 6),
@@ -398,7 +461,7 @@ class _MyRentalsScreenState extends State<MyRentalsScreen> {
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
-                            color: _primaryBlue,
+                            color: AppColors.primaryTeal,
                           ),
                         ),
                       ],
@@ -447,7 +510,7 @@ class _MyRentalsScreenState extends State<MyRentalsScreen> {
         label = 'Rejected';
         break;
       default:
-        color = _mediumGrey;
+        color = AppColors.textSecondary;
         label = status;
     }
 
@@ -474,7 +537,7 @@ class _MyRentalsScreenState extends State<MyRentalsScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: Colors.orange.shade700,
+        backgroundColor: AppColors.primaryTeal,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         margin: EdgeInsets.all(16),

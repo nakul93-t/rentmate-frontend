@@ -170,15 +170,23 @@ class SocketService {
     }
   }
 
-  // Send a message
-  void sendMessage(String requestId, String senderId, String text) {
+  // Send a message (text or image)
+  void sendMessage(
+    String requestId,
+    String senderId,
+    String text, {
+    String? imageUrl,
+    String messageType = 'text',
+  }) {
     if (socket != null && _isConnected) {
       socket!.emit('send_message', {
         'requestId': requestId,
         'senderId': senderId,
         'text': text,
+        'messageType': messageType,
+        'imageUrl': imageUrl,
       });
-      print('✉️ Message sent to room: $requestId');
+      print('✉️ Message sent to room: $requestId (type: $messageType)');
     } else {
       print('❌ Cannot send message - socket not connected');
     }

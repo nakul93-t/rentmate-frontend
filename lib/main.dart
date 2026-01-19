@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:rentmate/screens/app_shell.dart';
 import 'package:rentmate/screens/login_screen.dart';
+import 'package:rentmate/theme/app_theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -15,11 +15,9 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        textTheme: GoogleFonts.nunitoSansTextTheme(),
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blueAccent),
-      ),
+      title: 'RentMate',
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.lightTheme,
       home: AuthWrapper(),
     );
   }

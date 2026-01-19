@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:rentmate/constants.dart';
 import 'package:rentmate/screens/category_items_screen.dart';
+import 'package:rentmate/theme/app_colors.dart';
 
 class CategoryList extends StatefulWidget {
   const CategoryList({super.key});
@@ -14,41 +15,7 @@ class CategoryList extends StatefulWidget {
 class _CategoryListState extends State<CategoryList> {
   List<dynamic> categories = [];
   bool isLoading = true;
-
-  // Minimal color palette for rent app
-  static const Color _darkColor = Color(0xFF1E293B);
-
-  // Category icons and colors (minimal, professional look)
-  final Map<String, IconData> _categoryIcons = {
-    'electronics': Icons.devices_outlined,
-    'furniture': Icons.chair_outlined,
-    'vehicles': Icons.directions_car_outlined,
-    'tools': Icons.build_outlined,
-    'sports': Icons.sports_basketball_outlined,
-    'clothing': Icons.checkroom_outlined,
-    'dress': Icons.checkroom_outlined,
-    'books': Icons.menu_book_outlined,
-    'cameras': Icons.camera_alt_outlined,
-    'music': Icons.music_note_outlined,
-    'gaming': Icons.games_outlined,
-    'home': Icons.home_outlined,
-    'house': Icons.house_outlined,
-    'rooms': Icons.bed_outlined,
-    'room': Icons.bed_outlined,
-    'outdoor': Icons.park_outlined,
-    'kitchen': Icons.kitchen_outlined,
-    'appliances': Icons.kitchen_outlined,
-    'travel': Icons.luggage_outlined,
-    'party': Icons.celebration_outlined,
-    'kids': Icons.child_care_outlined,
-    'baby': Icons.child_friendly_outlined,
-    'fitness': Icons.fitness_center_outlined,
-    'gym': Icons.fitness_center_outlined,
-    'office': Icons.business_center_outlined,
-    'garden': Icons.yard_outlined,
-    'pet': Icons.pets_outlined,
-    'medical': Icons.medical_services_outlined,
-  };
+  int selectedIndex = 0; // Track selected category
 
   @override
   void initState() {
@@ -66,7 +33,11 @@ class _CategoryListState extends State<CategoryList> {
         final data = json.decode(response.body);
         if (mounted) {
           setState(() {
-            categories = data['data'];
+            // Add "All" as first option
+            categories = [
+              {'_id': 'all', 'categoryName': 'All'},
+              ...data['data'],
+            ];
             isLoading = false;
           });
         }
@@ -77,16 +48,6 @@ class _CategoryListState extends State<CategoryList> {
       print('Error fetching categories: $e');
       if (mounted) setState(() => isLoading = false);
     }
-  }
-
-  IconData _getIconForCategory(String name) {
-    final lowerName = name.toLowerCase();
-    for (final key in _categoryIcons.keys) {
-      if (lowerName.contains(key)) {
-        return _categoryIcons[key]!;
-      }
-    }
-    return Icons.category_outlined;
   }
 
   @override
@@ -105,81 +66,62 @@ class _CategoryListState extends State<CategoryList> {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       scrollDirection: Axis.horizontal,
       itemCount: categories.length,
-      separatorBuilder: (_, __) => const SizedBox(width: 12),
+      separatorBuilder: (_, __) => const SizedBox(width: 10),
       itemBuilder: (context, index) {
         final category = categories[index];
         final name = category['categoryName'] ?? 'Unknown';
-        final imageUrl = category['image'] ?? '';
+        final isSelected = selectedIndex == index;
 
         return GestureDetector(
           onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => CategoryItemsScreen(
-                  categoryId: category['_id'],
-                  categoryName: name,
+            setState(() => selectedIndex = index);
+
+            // Navigate only for non-"All" categories
+            if (category['_id'] != 'all') {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => CategoryItemsScreen(
+                    categoryId: category['_id'],
+                    categoryName: name,
+                  ),
                 ),
-              ),
-            );
+              );
+            }
           },
-          child: SizedBox(
-            width: 80,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Category Icon Container
-                Container(
-                  width: 64,
-                  height: 64,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: Colors.grey.shade200,
-                      width: 1,
-                    ),
-                    boxShadow: [
+          child: Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 20,
+              vertical: 12,
+            ),
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? const Color(0xFF8B5A2B) // Brown/orange for selected
+                  : Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: isSelected ? Colors.transparent : Colors.grey.shade300,
+                width: 1,
+              ),
+              boxShadow: isSelected
+                  ? [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.04),
+                        color: const Color(0xFF8B5A2B).withOpacity(0.3),
                         blurRadius: 8,
                         offset: const Offset(0, 2),
                       ),
-                    ],
-                  ),
-                  child: imageUrl.isNotEmpty
-                      ? ClipRRect(
-                          borderRadius: BorderRadius.circular(15),
-                          child: Image.network(
-                            imageUrl,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Icon(
-                              _getIconForCategory(name),
-                              color: _darkColor,
-                              size: 28,
-                            ),
-                          ),
-                        )
-                      : Icon(
-                          _getIconForCategory(name),
-                          color: _darkColor,
-                          size: 28,
-                        ),
+                    ]
+                  : null,
+            ),
+            child: Center(
+              child: Text(
+                name,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: isSelected ? Colors.white : AppColors.textPrimary,
                 ),
-                const SizedBox(height: 8),
-                // Category Name
-                Text(
-                  name,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: _darkColor,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                ),
-              ],
+              ),
             ),
           ),
         );

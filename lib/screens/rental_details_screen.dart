@@ -61,6 +61,130 @@ class _RentalDetailsScreenState extends State<RentalDetailsScreen> {
     }
   }
 
+  Widget? _buildBottomActionHide() {
+    if (_rental == null || _isLoading) return null;
+
+    final status = _rental!['status'] ?? 'pending';
+    final renterId = _rental!['renterId'] is Map
+        ? _rental!['renterId']['_id']
+        : _rental!['renterId'];
+
+    // Only show actions if status is pending AND current user is the owner (renterId)
+    if (status != 'pending' || renterId.toString() != widget.currentUserId) {
+      return null;
+    }
+
+    return Container(
+      padding: EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: Offset(0, -2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: OutlinedButton(
+              onPressed: _rejectRequest,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.red,
+                side: BorderSide(color: Colors.red),
+                padding: EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: Text('Reject'),
+            ),
+          ),
+          SizedBox(width: 16),
+          Expanded(
+            child: ElevatedButton(
+              onPressed: _acceptRequest,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _primaryBlue,
+                foregroundColor: Colors.white,
+                padding: EdgeInsets.symmetric(vertical: 16),
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: Text(
+                'Accept Request',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _acceptRequest() async {
+    try {
+      final response = await http.put(
+        Uri.parse('$baseUrl/rent-request/${widget.rentalId}/status'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'status': 'accepted'}),
+      );
+
+      if (response.statusCode == 200) {
+        _fetchRentalDetails(); // Refresh details
+        _showMessage('Request accepted successfully!');
+      } else {
+        _showMessage('Failed to accept request');
+      }
+    } catch (e) {
+      _showMessage('Error: $e');
+    }
+  }
+
+  Future<void> _rejectRequest() async {
+    // Show confirmation dialog
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Reject Request'),
+        content: Text('Are you sure you want to reject this request?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text('Reject', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      final response = await http.put(
+        Uri.parse('$baseUrl/rent-request/${widget.rentalId}/status'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'status': 'rejected'}),
+      );
+
+      if (response.statusCode == 200) {
+        _fetchRentalDetails(); // Refresh details
+        _showMessage('Request rejected');
+      } else {
+        _showMessage('Failed to reject request');
+      }
+    } catch (e) {
+      _showMessage('Error: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -101,6 +225,7 @@ class _RentalDetailsScreenState extends State<RentalDetailsScreen> {
                 ],
               ),
             ),
+      bottomNavigationBar: _buildBottomActionHide(),
     );
   }
 

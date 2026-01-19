@@ -4,9 +4,11 @@ import 'package:rentmate/screens/create_ad_screen.dart';
 import 'package:rentmate/screens/home/home_screen.dart';
 import 'package:rentmate/screens/profile_screen.dart';
 import 'package:rentmate/screens/my_listings_screen.dart';
+import 'package:rentmate/theme/app_colors.dart';
+import 'package:rentmate/widgets/glassmorphic_container.dart';
 
 class AppShell extends StatefulWidget {
-  final String currentUserId; // Pass user ID from login/auth
+  final String currentUserId;
 
   const AppShell({
     super.key,
@@ -20,7 +22,6 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   int _selectedIndex = 0;
 
-  // Build pages dynamically with required parameters
   List<Widget> _getPages() {
     return [
       HomeScreen(),
@@ -35,53 +36,95 @@ class _AppShellState extends State<AppShell> {
     final pages = _getPages();
 
     return Scaffold(
-      body: IndexedStack(
-        index: _selectedIndex,
-        children: pages, // This keeps state of all pages
+      extendBody: true,
+      body: GradientBackground(
+        child: IndexedStack(
+          index: _selectedIndex,
+          children: pages,
+        ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => CreateAdScreen(
-                currentUserId: widget.currentUserId,
-              ),
+      floatingActionButton: Container(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: AppColors.primaryGradient,
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primaryTeal.withAlpha(77),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
             ),
-          );
-        },
-        backgroundColor: Colors.blue,
-        child: Icon(Icons.add, color: Colors.white),
+          ],
+        ),
+        child: FloatingActionButton(
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => CreateAdScreen(
+                  currentUserId: widget.currentUserId,
+                ),
+              ),
+            );
+          },
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          child: const Icon(Icons.add, color: Colors.white, size: 28),
+        ),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      bottomNavigationBar: BottomAppBar(
-        shape: CircularNotchedRectangle(),
-        notchMargin: 8,
-        elevation: 8,
+      bottomNavigationBar: _buildBottomBar(),
+    );
+  }
+
+  Widget _buildBottomBar() {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: const Color(0x15000000),
+          width: 1,
+        ),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x15000000),
+            blurRadius: 20,
+            offset: Offset(0, -4),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
         child: Container(
-          height: 60,
+          height: 70,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               _buildNavItem(
                 icon: Icons.home_outlined,
+                activeIcon: Icons.home_rounded,
                 label: 'Home',
                 index: 0,
               ),
               _buildNavItem(
-                icon: Icons.chat_bubble_outline,
+                icon: Icons.chat_bubble_outline_rounded,
+                activeIcon: Icons.chat_bubble_rounded,
                 label: 'Chats',
                 index: 1,
               ),
-              SizedBox(width: 40), // Space for FAB
+              const SizedBox(width: 56), // Space for FAB
               _buildNavItem(
                 icon: Icons.inventory_2_outlined,
-                label: 'My Listings',
+                activeIcon: Icons.inventory_2_rounded,
+                label: 'Listings',
                 index: 2,
               ),
               _buildNavItem(
-                icon: Icons.person_outline,
-                label: 'Profile',
+                icon: Icons.person_outline_rounded,
+                activeIcon: Icons.person_rounded,
+                label: 'Account',
                 index: 3,
               ),
             ],
@@ -93,32 +136,49 @@ class _AppShellState extends State<AppShell> {
 
   Widget _buildNavItem({
     required IconData icon,
+    required IconData activeIcon,
     required String label,
     required int index,
   }) {
     final isSelected = _selectedIndex == index;
 
-    return InkWell(
+    return GestureDetector(
       onTap: () => setState(() => _selectedIndex = index),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            icon,
-            color: isSelected ? Colors.blue : Colors.grey,
-            size: 24,
-          ),
-          SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              color: isSelected ? Colors.blue : Colors.grey,
-              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+      behavior: HitTestBehavior.opaque,
+      child: SizedBox(
+        width: 60,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Icon with circular background when active
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: isSelected ? AppColors.primaryTeal : Colors.transparent,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                isSelected ? activeIcon : icon,
+                color: isSelected ? Colors.white : AppColors.textSecondary,
+                size: 22,
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                color: isSelected
+                    ? AppColors.primaryTeal
+                    : AppColors.textSecondary,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -1,9 +1,12 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:rentmate/constants.dart';
 import 'package:rentmate/item_details_screen.dart';
 import 'package:rentmate/screens/create_ad_screen.dart';
+import 'package:rentmate/theme/app_colors.dart';
+import 'package:rentmate/widgets/glassmorphic_container.dart';
 
 class MyListingsScreen extends StatefulWidget {
   final String currentUserId;
@@ -17,12 +20,6 @@ class MyListingsScreen extends StatefulWidget {
 
 class _MyListingsScreenState extends State<MyListingsScreen> {
   final String baseUrl = kBaseUrl;
-
-  // Color scheme
-  static const Color _primaryBlue = Color(0xFF2563EB);
-  static const Color _darkSlate = Color(0xFF1E293B);
-  static const Color _lightGrey = Color(0xFFF1F5F9);
-  static const Color _mediumGrey = Color(0xFF64748B);
 
   List<Map<String, dynamic>> _items = [];
   bool _isLoading = true;
@@ -62,23 +59,26 @@ class _MyListingsScreenState extends State<MyListingsScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Delete Listing'),
-        content: Text(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Delete Listing'),
+        content: const Text(
           'Are you sure you want to delete this listing? This action cannot be undone.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: Text('Cancel'),
+            child: Text(
+              'Cancel',
+              style: TextStyle(color: AppColors.textSecondary),
+            ),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
+              backgroundColor: AppColors.error,
               foregroundColor: Colors.white,
             ),
-            child: Text('Delete'),
+            child: const Text('Delete'),
           ),
         ],
       ),
@@ -105,108 +105,179 @@ class _MyListingsScreenState extends State<MyListingsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _lightGrey,
-      appBar: AppBar(
-        backgroundColor: Colors.orange,
-        foregroundColor: Colors.white,
-        title: Text('My Listings'),
-        elevation: 0,
-        automaticallyImplyLeading: false,
-      ),
-      body: RefreshIndicator(
-        onRefresh: _fetchItems,
-        color: _primaryBlue,
-        child: _isLoading
-            ? Center(child: CircularProgressIndicator(color: _primaryBlue))
-            : _items.isEmpty
-            ? _buildEmptyState()
-            : _buildItemsList(),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () async {
-          final result = await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) =>
-                  CreateAdScreen(currentUserId: widget.currentUserId),
+      backgroundColor: Colors.transparent,
+      body: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'My Listings',
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () async {
+                      final result = await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => CreateAdScreen(
+                            currentUserId: widget.currentUserId,
+                          ),
+                        ),
+                      );
+                      if (result == true) _fetchItems();
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        gradient: AppColors.primaryGradient,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.primaryTeal.withOpacity(0.3),
+                            blurRadius: 8,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.add_rounded,
+                        color: Colors.white,
+                        size: 24,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          );
-          if (result == true) _fetchItems();
-        },
-        backgroundColor: Colors.orange,
-        foregroundColor: Colors.white,
-        icon: Icon(Icons.add),
-        label: Text('New Listing'),
+            // Body
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: _fetchItems,
+                color: AppColors.primaryTeal,
+                child: _isLoading
+                    ? Center(
+                        child: CircularProgressIndicator(
+                          color: AppColors.primaryTeal,
+                        ),
+                      )
+                    : _items.isEmpty
+                    ? _buildEmptyState()
+                    : _buildItemsList(),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildEmptyState() {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 100,
-            height: 100,
-            decoration: BoxDecoration(
-              color: Colors.orange.withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Icons.inventory_2_outlined,
-              size: 50,
-              color: Colors.orange,
-            ),
-          ),
-          SizedBox(height: 24),
-          Text(
-            'No listings yet',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: _darkSlate,
-            ),
-          ),
-          SizedBox(height: 8),
-          Text(
-            'Post your first item to start earning!',
-            style: TextStyle(
-              fontSize: 14,
-              color: _mediumGrey,
-            ),
-          ),
-          SizedBox(height: 24),
-          ElevatedButton.icon(
-            onPressed: () async {
-              final result = await Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) =>
-                      CreateAdScreen(currentUserId: widget.currentUserId),
-                ),
-              );
-              if (result == true) _fetchItems();
-            },
-            icon: Icon(Icons.add),
-            label: Text('Create Listing'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.orange,
-              foregroundColor: Colors.white,
-              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+      child: GlassmorphicContainer(
+        padding: const EdgeInsets.all(32),
+        margin: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: AppColors.primaryGradient,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.inventory_2_outlined,
+                size: 48,
+                color: Colors.white,
               ),
             ),
-          ),
-        ],
+            const SizedBox(height: 24),
+            Text(
+              'No listings yet',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Post your first item to start earning!',
+              style: TextStyle(
+                fontSize: 14,
+                color: AppColors.textSecondary,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            Container(
+              decoration: BoxDecoration(
+                gradient: AppColors.primaryGradient,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primaryTeal.withOpacity(0.3),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () async {
+                    final result = await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            CreateAdScreen(currentUserId: widget.currentUserId),
+                      ),
+                    );
+                    if (result == true) _fetchItems();
+                  },
+                  borderRadius: BorderRadius.circular(12),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 12,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: const [
+                        Icon(Icons.add, color: Colors.white),
+                        SizedBox(width: 8),
+                        Text(
+                          'Create Listing',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildItemsList() {
     return ListView.builder(
-      padding: EdgeInsets.all(16),
+      padding: const EdgeInsets.all(16),
       itemCount: _items.length,
       itemBuilder: (context, index) => _buildItemCard(_items[index]),
     );
@@ -229,19 +300,10 @@ class _MyListingsScreenState extends State<MyListingsScreen> {
       itemId = item['_id']?.toString() ?? '';
     }
 
-    return Container(
-      margin: EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 10,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
+    return GlassmorphicContainer(
+      margin: const EdgeInsets.only(bottom: 12),
+      borderRadius: 18,
+      backgroundColor: Colors.white.withOpacity(0.85),
       child: InkWell(
         onTap: () {
           Navigator.push(
@@ -254,32 +316,46 @@ class _MyListingsScreenState extends State<MyListingsScreen> {
             ),
           );
         },
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         child: Padding(
-          padding: EdgeInsets.all(12),
+          padding: const EdgeInsets.all(12),
           child: Row(
             children: [
-              // Item image
+              // Item image with gradient border
               Container(
                 width: 80,
                 height: 80,
                 decoration: BoxDecoration(
-                  color: Colors.grey[200],
-                  borderRadius: BorderRadius.circular(12),
+                  gradient: AppColors.primaryGradient,
+                  borderRadius: BorderRadius.circular(14),
                 ),
-                child: imageUrl != null
-                    ? ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Image.network(
-                          imageUrl,
-                          fit: BoxFit.cover,
-                          errorBuilder: (c, e, s) =>
-                              Icon(Icons.image, color: Colors.grey, size: 32),
+                padding: const EdgeInsets.all(2),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.backgroundLight,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: imageUrl != null
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.network(
+                            imageUrl,
+                            fit: BoxFit.cover,
+                            errorBuilder: (c, e, s) => Icon(
+                              Icons.image,
+                              color: AppColors.textLight,
+                              size: 32,
+                            ),
+                          ),
+                        )
+                      : Icon(
+                          Icons.image,
+                          color: AppColors.textLight,
+                          size: 32,
                         ),
-                      )
-                    : Icon(Icons.image, color: Colors.grey, size: 32),
+                ),
               ),
-              SizedBox(width: 14),
+              const SizedBox(width: 14),
               // Item details
               Expanded(
                 child: Column(
@@ -287,42 +363,46 @@ class _MyListingsScreenState extends State<MyListingsScreen> {
                   children: [
                     Text(
                       itemName,
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        color: _darkSlate,
+                        color: AppColors.textPrimary,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    SizedBox(height: 4),
+                    const SizedBox(height: 4),
                     Text(
                       '₹$basePrice / $priceUnit',
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
-                        color: _primaryBlue,
+                        color: AppColors.primaryTeal,
                       ),
                     ),
-                    SizedBox(height: 8),
+                    const SizedBox(height: 8),
                     _buildStatusBadge(isActive),
                   ],
                 ),
               ),
               // Actions
               PopupMenuButton<String>(
-                icon: Icon(Icons.more_vert, color: _mediumGrey),
+                icon: Icon(Icons.more_vert, color: AppColors.textSecondary),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(14),
                 ),
                 itemBuilder: (context) => [
                   PopupMenuItem(
                     value: 'edit',
                     child: Row(
                       children: [
-                        Icon(Icons.edit_outlined, size: 20, color: _darkSlate),
-                        SizedBox(width: 12),
-                        Text('Edit'),
+                        Icon(
+                          Icons.edit_outlined,
+                          size: 20,
+                          color: AppColors.primaryTeal,
+                        ),
+                        const SizedBox(width: 12),
+                        const Text('Edit'),
                       ],
                     ),
                   ),
@@ -330,9 +410,16 @@ class _MyListingsScreenState extends State<MyListingsScreen> {
                     value: 'delete',
                     child: Row(
                       children: [
-                        Icon(Icons.delete_outline, size: 20, color: Colors.red),
-                        SizedBox(width: 12),
-                        Text('Delete', style: TextStyle(color: Colors.red)),
+                        Icon(
+                          Icons.delete_outline,
+                          size: 20,
+                          color: AppColors.error,
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          'Delete',
+                          style: TextStyle(color: AppColors.error),
+                        ),
                       ],
                     ),
                   ),
@@ -363,15 +450,25 @@ class _MyListingsScreenState extends State<MyListingsScreen> {
 
   Widget _buildStatusBadge(bool isActive) {
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: isActive
-            ? Colors.green.withOpacity(0.1)
-            : Colors.grey.withOpacity(0.1),
+        gradient: isActive
+            ? LinearGradient(
+                colors: [
+                  AppColors.success.withOpacity(0.15),
+                  AppColors.success.withOpacity(0.05),
+                ],
+              )
+            : LinearGradient(
+                colors: [
+                  Colors.grey.withOpacity(0.1),
+                  Colors.grey.withOpacity(0.05),
+                ],
+              ),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: isActive
-              ? Colors.green.withOpacity(0.3)
+              ? AppColors.success.withOpacity(0.3)
               : Colors.grey.withOpacity(0.3),
         ),
       ),
@@ -382,17 +479,17 @@ class _MyListingsScreenState extends State<MyListingsScreen> {
             width: 6,
             height: 6,
             decoration: BoxDecoration(
-              color: isActive ? Colors.green : Colors.grey,
+              color: isActive ? AppColors.success : Colors.grey,
               shape: BoxShape.circle,
             ),
           ),
-          SizedBox(width: 6),
+          const SizedBox(width: 6),
           Text(
             isActive ? 'Active' : 'Inactive',
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w600,
-              color: isActive ? Colors.green[700] : Colors.grey[600],
+              color: isActive ? AppColors.success : Colors.grey[600],
             ),
           ),
         ],
@@ -405,10 +502,10 @@ class _MyListingsScreenState extends State<MyListingsScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: isError ? Colors.red.shade600 : Colors.green.shade600,
+        backgroundColor: isError ? AppColors.error : AppColors.success,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        margin: EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
       ),
     );
   }

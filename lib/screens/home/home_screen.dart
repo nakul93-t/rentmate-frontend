@@ -1,10 +1,13 @@
 import 'dart:convert';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:rentmate/constants.dart';
 import 'package:rentmate/item_details_screen.dart';
 import 'package:rentmate/screens/home/widgets/category_list.dart';
 import 'package:rentmate/screens/notifications/notification_screen.dart';
+import 'package:rentmate/theme/app_colors.dart';
+import 'package:rentmate/widgets/ui_components.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -21,12 +24,6 @@ class _HomeScreenState extends State<HomeScreen> {
   bool isLoadingItems = false;
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _searchController = TextEditingController();
-
-  // Color scheme
-  static const Color _primaryBlue = Color(0xFF2563EB);
-  static const Color _darkSlate = Color(0xFF1E293B);
-  static const Color _lightGrey = Color(0xFFF1F5F9);
-  static const Color _mediumGrey = Color(0xFF64748B);
 
   @override
   void initState() {
@@ -76,12 +73,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _filterItems(String query) {
     if (query.isEmpty) {
-      // Load all items when search is cleared
       _loadItems(showLoading: false);
       return;
     }
-
-    // Call backend API with search parameter
     _searchItems(query);
   }
 
@@ -113,22 +107,30 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _lightGrey,
+      backgroundColor: Colors.transparent,
       body: RefreshIndicator(
         onRefresh: () => _loadItems(showLoading: false),
-        color: _primaryBlue,
+        color: AppColors.primaryTeal,
         child: CustomScrollView(
           controller: _scrollController,
           slivers: [
-            // App Bar
+            // App Bar with glass effect
             SliverAppBar(
-              backgroundColor: Colors.white,
+              backgroundColor: Colors.transparent,
               elevation: 0,
               pinned: true,
               floating: true,
               titleSpacing: 0,
               automaticallyImplyLeading: false,
               toolbarHeight: 70,
+              flexibleSpace: ClipRect(
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                  child: Container(
+                    color: Colors.white.withOpacity(0.7),
+                  ),
+                ),
+              ),
               title: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0),
                 child: Row(
@@ -139,17 +141,22 @@ class _HomeScreenState extends State<HomeScreen> {
                       fit: BoxFit.contain,
                     ),
                     const Spacer(),
-                    // Location Pill
+                    // Location Pill with teal
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 12,
                         vertical: 8,
                       ),
                       decoration: BoxDecoration(
-                        color: _primaryBlue.withOpacity(0.08),
+                        gradient: LinearGradient(
+                          colors: [
+                            AppColors.primaryTeal.withOpacity(0.1),
+                            AppColors.primaryTealLight.withOpacity(0.05),
+                          ],
+                        ),
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                          color: _primaryBlue.withOpacity(0.2),
+                          color: AppColors.primaryTeal.withOpacity(0.3),
                         ),
                       ),
                       child: Row(
@@ -157,13 +164,13 @@ class _HomeScreenState extends State<HomeScreen> {
                           Icon(
                             Icons.location_on,
                             size: 16,
-                            color: _primaryBlue,
+                            color: AppColors.primaryTeal,
                           ),
                           const SizedBox(width: 4),
                           Text(
                             'Azhikode',
                             style: TextStyle(
-                              color: _darkSlate,
+                              color: AppColors.textPrimary,
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
                             ),
@@ -172,26 +179,35 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    // Notification
-                    Container(
-                      decoration: BoxDecoration(
-                        color: _lightGrey,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.grey.shade200),
-                      ),
-                      child: IconButton(
-                        icon: Icon(
-                          Icons.notifications_outlined,
-                          color: _darkSlate,
-                        ),
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => NotificationScreen(),
+                    // Notification with glass effect
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => NotificationScreen(),
+                          ),
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.8),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.grey.shade200),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
                             ),
-                          );
-                        },
+                          ],
+                        ),
+                        child: Icon(
+                          Icons.notifications_outlined,
+                          color: AppColors.textPrimary,
+                          size: 22,
+                        ),
                       ),
                     ),
                   ],
@@ -199,112 +215,23 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
 
-            // Search Bar
+            // Search Bar with pill style
             SliverToBoxAdapter(
               child: Container(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                color: Colors.white,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: _lightGrey,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Colors.grey.shade200),
-                  ),
-                  child: TextField(
-                    controller: _searchController,
-                    onChanged: _filterItems,
-                    style: TextStyle(color: _darkSlate, fontSize: 15),
-                    decoration: InputDecoration(
-                      prefixIcon: Icon(Icons.search, color: _primaryBlue),
-                      suffixIcon: _searchController.text.isNotEmpty
-                          ? IconButton(
-                              icon: Icon(Icons.clear, color: _mediumGrey),
-                              onPressed: () {
-                                _searchController.clear();
-                                _filterItems('');
-                              },
-                            )
-                          : null,
-                      hintText: "Search items, categories...",
-                      hintStyle: TextStyle(
-                        color: _mediumGrey.withOpacity(0.7),
-                        fontSize: 15,
-                      ),
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 14,
-                      ),
-                    ),
-                  ),
+                child: PillSearchBar(
+                  controller: _searchController,
+                  onChanged: _filterItems,
+                  hintText: 'Search items, categories...',
+                  onClear: () {
+                    _searchController.clear();
+                    _filterItems('');
+                  },
                 ),
               ),
             ),
 
-            // Hero Banner
-            SliverToBoxAdapter(
-              child: Container(
-                margin: const EdgeInsets.fromLTRB(16, 8, 16, 20),
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: _darkSlate,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Rent Anything',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Save money, reduce waste',
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 14,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 8,
-                            ),
-                            decoration: BoxDecoration(
-                              color: _primaryBlue,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              'List an Item',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Icon(
-                      Icons.handshake_outlined,
-                      color: Colors.white24,
-                      size: 64,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            // Categories
+            // Categories Section
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.only(bottom: 16.0),
@@ -321,21 +248,166 @@ class _HomeScreenState extends State<HomeScreen> {
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          color: _darkSlate,
+                          color: AppColors.textPrimary,
                         ),
                       ),
                     ),
                     const SizedBox(height: 8),
-                    const SizedBox(height: 105, child: CategoryList()),
+                    const SizedBox(height: 50, child: CategoryList()),
                   ],
                 ),
               ),
             ),
 
-            // Nearby Items Title
+            // Featured Banner Card with Image
+            SliverToBoxAdapter(
+              child: Container(
+                margin: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+                height: 180,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.15),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      // Background Image
+                      Image.network(
+                        'https://images.unsplash.com/photo-1441984904996-e0b6ba687e04?w=800',
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          color: AppColors.primaryTeal.withOpacity(0.3),
+                          child: Icon(
+                            Icons.store_outlined,
+                            color: Colors.white,
+                            size: 48,
+                          ),
+                        ),
+                      ),
+                      // Gradient Overlay
+                      Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.transparent,
+                              Colors.black.withOpacity(0.7),
+                            ],
+                          ),
+                        ),
+                      ),
+                      // Content
+                      Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            // Title
+                            Text(
+                              'Rent Anything, Anytime',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 4),
+                            // Location Row
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.location_on_outlined,
+                                  color: Colors.white.withOpacity(0.8),
+                                  size: 14,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'Azhikode, Kannur',
+                                  style: TextStyle(
+                                    color: Colors.white.withOpacity(0.8),
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                const Spacer(),
+                                // Rating
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.star_rounded,
+                                        color: Colors.amber,
+                                        size: 14,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        '4.6 (121)',
+                                        style: TextStyle(
+                                          color: AppColors.textPrimary,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Wishlist Button
+                      Positioned(
+                        top: 12,
+                        right: 12,
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.1),
+                                blurRadius: 4,
+                              ),
+                            ],
+                          ),
+                          child: Icon(
+                            Icons.favorite_border_rounded,
+                            color: AppColors.textPrimary,
+                            size: 18,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            // Nearby Items Title with See All
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -344,21 +416,17 @@ class _HomeScreenState extends State<HomeScreen> {
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
-                        color: _darkSlate,
+                        color: AppColors.textPrimary,
                       ),
                     ),
-                    // TextButton(
-                    //   onPressed: () {},
-                    //   style: TextButton.styleFrom(
-                    //     foregroundColor: _primaryBlue,
-                    //     padding: EdgeInsets.zero,
-                    //     minimumSize: const Size(0, 0),
-                    //   ),
-                    //   child: const Text(
-                    //     'See all',
-                    //     style: TextStyle(fontWeight: FontWeight.w600),
-                    //   ),
-                    // ),
+                    Text(
+                      "See All",
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.primaryTeal,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -372,7 +440,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: Center(
                         child: Padding(
                           padding: const EdgeInsets.all(40),
-                          child: CircularProgressIndicator(color: _primaryBlue),
+                          child: CircularProgressIndicator(
+                            color: AppColors.primaryTeal,
+                          ),
                         ),
                       ),
                     )
@@ -386,7 +456,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               Icon(
                                 Icons.search_off_rounded,
                                 size: 64,
-                                color: _mediumGrey.withOpacity(0.5),
+                                color: AppColors.textLight,
                               ),
                               const SizedBox(height: 16),
                               Text(
@@ -394,7 +464,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w600,
-                                  color: _darkSlate,
+                                  color: AppColors.textPrimary,
                                 ),
                               ),
                               const SizedBox(height: 4),
@@ -402,7 +472,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 "Try a different search term",
                                 style: TextStyle(
                                   fontSize: 14,
-                                  color: _mediumGrey,
+                                  color: AppColors.textSecondary,
                                 ),
                               ),
                             ],
@@ -438,7 +508,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// Premium Item Card
+// Premium Item Card with enhanced styling
 class ItemCard extends StatelessWidget {
   const ItemCard({
     super.key,
@@ -449,15 +519,9 @@ class ItemCard extends StatelessWidget {
   final Map<String, dynamic> item;
   final String? currentUserId;
 
-  static const Color _primaryBlue = Color(0xFF2563EB);
-  static const Color _darkSlate = Color(0xFF1E293B);
-  static const Color _mediumGrey = Color(0xFF64748B);
-
   @override
   Widget build(BuildContext context) {
     final isAvailable = item['isActive'] ?? true;
-    final createdBy = item['createdBy'];
-    final ownerName = createdBy is Map ? (createdBy['name'] ?? 'User') : 'User';
 
     // Handle itemId - could be String or Map with $oid
     String itemId;
@@ -468,6 +532,10 @@ class ItemCard extends StatelessWidget {
     } else {
       itemId = item['_id'].toString();
     }
+
+    final basePrice = item['basePrice'] ?? 0;
+    final discountedPrice = (basePrice * 0.8)
+        .round(); // 20% discount for display
 
     return GestureDetector(
       onTap: () {
@@ -488,14 +556,9 @@ class ItemCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: _primaryBlue.withOpacity(0.08),
-              blurRadius: 16,
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 10,
               offset: const Offset(0, 4),
-            ),
-            BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 4,
-              offset: const Offset(0, 2),
             ),
           ],
         ),
@@ -504,7 +567,7 @@ class ItemCard extends StatelessWidget {
           children: [
             // Image Section
             Expanded(
-              flex: 5,
+              flex: 3,
               child: Stack(
                 fit: StackFit.expand,
                 children: [
@@ -514,9 +577,7 @@ class ItemCard extends StatelessWidget {
                       top: Radius.circular(16),
                     ),
                     child: Container(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF1F5F9),
-                      ),
+                      color: AppColors.backgroundLight,
                       child: Image.network(
                         item['images'] != null && item['images'].isNotEmpty
                             ? item['images'][0]
@@ -525,7 +586,7 @@ class ItemCard extends StatelessWidget {
                         errorBuilder: (_, __, ___) => Center(
                           child: Icon(
                             Icons.image_outlined,
-                            color: Colors.grey.shade300,
+                            color: AppColors.textLight,
                             size: 40,
                           ),
                         ),
@@ -533,176 +594,103 @@ class ItemCard extends StatelessWidget {
                     ),
                   ),
 
-                  // Top badges row
-                  Positioned(
-                    top: 10,
-                    left: 10,
-                    right: 10,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        // Status badge
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 5,
-                          ),
-                          decoration: BoxDecoration(
-                            color: isAvailable
-                                ? _darkSlate
-                                : Colors.red.shade400,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            isAvailable ? '● Available' : '● Rented',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 0.3,
-                            ),
-                          ),
+                  // Discount Badge
+                  if (isAvailable)
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
                         ),
-                        // Favorite button
-                        Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
+                        decoration: BoxDecoration(
+                          color: Colors.deepOrange,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          '-20%',
+                          style: TextStyle(
                             color: Colors.white,
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.1),
-                                blurRadius: 8,
-                              ),
-                            ],
-                          ),
-                          child: Icon(
-                            Icons.favorite_border_rounded,
-                            size: 18,
-                            color: _darkSlate,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-
-                  // Price overlay at bottom of image
-                  Positioned(
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.bottomCenter,
-                          end: Alignment.topCenter,
-                          colors: [
-                            Colors.black.withOpacity(0.7),
-                            Colors.transparent,
-                          ],
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Text(
-                            item['basePrice'] != null
-                                ? '₹${item['basePrice']}'
-                                : '₹--',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
-                          ),
-                          Text(
-                            '/day',
-                            style: TextStyle(
-                              color: Colors.white.withOpacity(0.8),
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
                       ),
                     ),
-                  ),
                 ],
               ),
             ),
 
             // Details Section
             Expanded(
-              flex: 3,
+              flex: 2,
               child: Padding(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(10),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    // Title
-                    Text(
-                      item['itemName'] ?? 'Unnamed Item',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14,
-                        color: _darkSlate,
-                        height: 1.2,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-
-                    // Owner + Rating row
+                    // Title + Rating Row
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Owner avatar
-                        Container(
-                          width: 22,
-                          height: 22,
-                          decoration: BoxDecoration(
-                            color: _primaryBlue.withOpacity(0.1),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Center(
-                            child: Text(
-                              ownerName[0].toUpperCase(),
-                              style: TextStyle(
-                                color: _primaryBlue,
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
                         Expanded(
                           child: Text(
-                            ownerName,
+                            item['itemName'] ?? 'Unnamed Item',
                             style: TextStyle(
-                              fontSize: 11,
-                              color: _mediumGrey,
-                              fontWeight: FontWeight.w500,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                              color: AppColors.textPrimary,
+                              height: 1.2,
                             ),
-                            maxLines: 1,
+                            maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
+                        const SizedBox(width: 4),
                         // Rating
-                        Icon(
-                          Icons.star_rounded,
-                          size: 14,
-                          color: Colors.amber.shade600,
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.star_rounded,
+                              color: Colors.amber,
+                              size: 14,
+                            ),
+                            const SizedBox(width: 2),
+                            Text(
+                              '4.7',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 2),
+                      ],
+                    ),
+
+                    // Price Row
+                    Row(
+                      children: [
+                        // Original Price (strikethrough)
                         Text(
-                          '4.8',
+                          '₹$basePrice',
                           style: TextStyle(
-                            fontSize: 11,
-                            color: _darkSlate,
-                            fontWeight: FontWeight.w600,
+                            fontSize: 12,
+                            color: AppColors.textLight,
+                            decoration: TextDecoration.lineThrough,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        // Discounted Price
+                        Text(
+                          '₹$discountedPrice',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.primaryTeal,
                           ),
                         ),
                       ],
