@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:intl/intl.dart';
 import 'package:rentmate/constants.dart';
+import 'package:rentmate/theme/app_colors.dart';
 
 class ReturnItemForm extends StatefulWidget {
   final Map<String, dynamic> request;
@@ -21,12 +22,6 @@ class ReturnItemForm extends StatefulWidget {
 class _ReturnItemFormState extends State<ReturnItemForm> {
   final _formKey = GlobalKey<FormState>();
   final String baseUrl = kBaseUrl;
-
-  // Color scheme
-  static const Color _primaryBlue = Color(0xFF2563EB);
-  static const Color _darkSlate = Color(0xFF1E293B);
-  static const Color _lightGrey = Color(0xFFF1F5F9);
-  static const Color _mediumGrey = Color(0xFF64748B);
 
   // Form controllers
   final _extraChargeController = TextEditingController();
@@ -166,9 +161,9 @@ class _ReturnItemFormState extends State<ReturnItemForm> {
     final rentalDetails = widget.request['rentalDetails'];
 
     return Scaffold(
-      backgroundColor: _lightGrey,
+      backgroundColor: AppColors.backgroundLight,
       appBar: AppBar(
-        backgroundColor: Colors.orange,
+        backgroundColor: AppColors.primaryTeal,
         foregroundColor: Colors.white,
         title: Text('Mark as Returned'),
         elevation: 0,
@@ -195,12 +190,15 @@ class _ReturnItemFormState extends State<ReturnItemForm> {
                     child: Container(
                       padding: EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: _lightGrey,
+                        color: AppColors.backgroundLight,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Row(
                         children: [
-                          Icon(Icons.calendar_today, color: _mediumGrey),
+                          Icon(
+                            Icons.calendar_today,
+                            color: AppColors.textSecondary,
+                          ),
                           SizedBox(width: 12),
                           Expanded(
                             child: Column(
@@ -210,7 +208,7 @@ class _ReturnItemFormState extends State<ReturnItemForm> {
                                   'Return Date',
                                   style: TextStyle(
                                     fontSize: 12,
-                                    color: _mediumGrey,
+                                    color: AppColors.textSecondary,
                                   ),
                                 ),
                                 Text(
@@ -218,13 +216,17 @@ class _ReturnItemFormState extends State<ReturnItemForm> {
                                   style: TextStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.w600,
-                                    color: _darkSlate,
+                                    color: AppColors.textPrimary,
                                   ),
                                 ),
                               ],
                             ),
                           ),
-                          Icon(Icons.edit, color: _primaryBlue, size: 20),
+                          Icon(
+                            Icons.edit,
+                            color: AppColors.primaryTeal,
+                            size: 20,
+                          ),
                         ],
                       ),
                     ),
@@ -235,15 +237,18 @@ class _ReturnItemFormState extends State<ReturnItemForm> {
                     Container(
                       padding: EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.orange.withOpacity(0.1),
+                        color: AppColors.primaryTeal.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
-                          color: Colors.orange.withOpacity(0.3),
+                          color: AppColors.primaryTeal.withOpacity(0.3),
                         ),
                       ),
                       child: Row(
                         children: [
-                          Icon(Icons.warning_amber, color: Colors.orange),
+                          Icon(
+                            Icons.warning_amber,
+                            color: AppColors.primaryTeal,
+                          ),
                           SizedBox(width: 8),
                           Expanded(
                             child: Column(
@@ -253,13 +258,13 @@ class _ReturnItemFormState extends State<ReturnItemForm> {
                                   'Late Return: $_extraDays extra day(s)',
                                   style: TextStyle(
                                     fontWeight: FontWeight.bold,
-                                    color: Colors.orange[800],
+                                    color: AppColors.primaryTealDark,
                                   ),
                                 ),
                                 Text(
                                   'Late fee: ₹${_lateFee.toStringAsFixed(0)}',
                                   style: TextStyle(
-                                    color: Colors.orange[700],
+                                    color: AppColors.primaryTeal,
                                     fontSize: 13,
                                   ),
                                 ),
@@ -277,10 +282,10 @@ class _ReturnItemFormState extends State<ReturnItemForm> {
                       labelText: 'Item Condition',
                       prefixIcon: Icon(
                         Icons.check_circle_outline,
-                        color: _mediumGrey,
+                        color: AppColors.textSecondary,
                       ),
                       filled: true,
-                      fillColor: _lightGrey,
+                      fillColor: AppColors.backgroundLight,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide.none,
@@ -312,11 +317,11 @@ class _ReturnItemFormState extends State<ReturnItemForm> {
                       labelText: 'Extra Charges',
                       prefixIcon: Icon(
                         Icons.add_circle_outline,
-                        color: _mediumGrey,
+                        color: AppColors.textSecondary,
                       ),
                       prefixText: '₹ ',
                       filled: true,
-                      fillColor: _lightGrey,
+                      fillColor: AppColors.backgroundLight,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide.none,
@@ -332,11 +337,11 @@ class _ReturnItemFormState extends State<ReturnItemForm> {
                       labelText: 'Damage Charges (if any)',
                       prefixIcon: Icon(
                         Icons.report_problem_outlined,
-                        color: _mediumGrey,
+                        color: AppColors.textSecondary,
                       ),
                       prefixText: '₹ ',
                       filled: true,
-                      fillColor: _lightGrey,
+                      fillColor: AppColors.backgroundLight,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide.none,
@@ -360,7 +365,7 @@ class _ReturnItemFormState extends State<ReturnItemForm> {
                       labelText: 'Return Notes / Comments',
                       hintText: 'Any damage, issues, or remarks...',
                       filled: true,
-                      fillColor: _lightGrey,
+                      fillColor: AppColors.backgroundLight,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide.none,
@@ -379,7 +384,7 @@ class _ReturnItemFormState extends State<ReturnItemForm> {
                 child: ElevatedButton(
                   onPressed: _isSubmitting ? null : _submitForm,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.orange,
+                    backgroundColor: AppColors.primaryTeal,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -468,18 +473,24 @@ class _ReturnItemFormState extends State<ReturnItemForm> {
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        color: _darkSlate,
+                        color: AppColors.textPrimary,
                       ),
                     ),
                     SizedBox(height: 4),
                     Text(
                       'Rented to: ${customer?['name'] ?? 'Customer'}',
-                      style: TextStyle(color: _mediumGrey, fontSize: 13),
+                      style: TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 13,
+                      ),
                     ),
                     if (rentalDetails?['customerMobile'] != null)
                       Text(
                         'Mobile: ${rentalDetails!['customerMobile']}',
-                        style: TextStyle(color: _mediumGrey, fontSize: 12),
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 12,
+                        ),
                       ),
                   ],
                 ),
@@ -490,7 +501,7 @@ class _ReturnItemFormState extends State<ReturnItemForm> {
           Container(
             padding: EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: _primaryBlue.withOpacity(0.1),
+              color: AppColors.primaryTeal.withOpacity(0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Column(
@@ -503,7 +514,10 @@ class _ReturnItemFormState extends State<ReturnItemForm> {
                       children: [
                         Text(
                           'Rent From Date',
-                          style: TextStyle(fontSize: 11, color: _mediumGrey),
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: AppColors.textSecondary,
+                          ),
                         ),
                         Text(
                           widget.request['startDate'] != null
@@ -525,14 +539,17 @@ class _ReturnItemFormState extends State<ReturnItemForm> {
                       children: [
                         Text(
                           'Total Days',
-                          style: TextStyle(fontSize: 11, color: _mediumGrey),
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: AppColors.textSecondary,
+                          ),
                         ),
                         Text(
                           '$_totalDays days',
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 14,
-                            color: _primaryBlue,
+                            color: AppColors.primaryTeal,
                           ),
                         ),
                       ],
@@ -548,7 +565,10 @@ class _ReturnItemFormState extends State<ReturnItemForm> {
                       children: [
                         Text(
                           'Expected Return',
-                          style: TextStyle(fontSize: 11, color: _mediumGrey),
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: AppColors.textSecondary,
+                          ),
                         ),
                         Text(
                           widget.request['endDate'] != null
@@ -570,14 +590,17 @@ class _ReturnItemFormState extends State<ReturnItemForm> {
                       children: [
                         Text(
                           'Rental Amount',
-                          style: TextStyle(fontSize: 11, color: _mediumGrey),
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: AppColors.textSecondary,
+                          ),
                         ),
                         Text(
                           '₹${widget.request['totalAmount'] ?? 0}',
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 16,
-                            color: _primaryBlue,
+                            color: AppColors.primaryTeal,
                           ),
                         ),
                       ],
@@ -659,14 +682,14 @@ class _ReturnItemFormState extends State<ReturnItemForm> {
         children: [
           Row(
             children: [
-              Icon(icon, color: Colors.orange, size: 20),
+              Icon(icon, color: AppColors.primaryTeal, size: 20),
               SizedBox(width: 8),
               Text(
                 title,
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  color: _darkSlate,
+                  color: AppColors.textPrimary,
                 ),
               ),
             ],

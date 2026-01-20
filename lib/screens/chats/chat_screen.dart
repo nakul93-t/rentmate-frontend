@@ -8,20 +8,25 @@ import 'package:rentmate/theme/app_colors.dart';
 import 'dart:convert';
 import 'dart:async';
 import 'package:rentmate/constants.dart';
+import 'package:rentmate/item_details_screen.dart';
 
 class ChatScreen extends StatefulWidget {
   final String requestId;
   final String currentUserId;
   final String otherUserName;
+  final String? otherUserProfileImage;
   final String itemName;
   final String? chatId;
+  final String? itemId;
 
   const ChatScreen({
     required this.requestId,
     required this.currentUserId,
     required this.otherUserName,
+    this.otherUserProfileImage,
     required this.itemName,
     this.chatId,
+    this.itemId,
     Key? key,
   }) : super(key: key);
 
@@ -52,6 +57,7 @@ class _ChatScreenState extends State<ChatScreen> {
   DateTime? _endDate;
   bool _isRenter = false;
   bool _isAccepting = false;
+  String? _itemId;
 
   // Design colors
   static const Color _sentBubbleColor = Color(0xFF1C1C1E); // Black/dark
@@ -143,6 +149,11 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _checkRequestDetails() async {
+    // Initialize from widget if available
+    if (widget.itemId != null && _itemId == null) {
+      _itemId = widget.itemId;
+    }
+
     try {
       final response = await http.get(
         Uri.parse('$kBaseUrl/rent-request/${widget.requestId}'),
@@ -157,6 +168,14 @@ class _ChatScreenState extends State<ChatScreen> {
             ? data['renterId']['_id']
             : data['renterId'];
 
+        // Extract itemId from response
+        String? itemIdFromApi;
+        if (data['itemId'] is Map) {
+          itemIdFromApi = data['itemId']['_id'];
+        } else if (data['itemId'] is String) {
+          itemIdFromApi = data['itemId'];
+        }
+
         if (mounted) {
           setState(() {
             isSelfChat = customerId.toString() == renterId.toString();
@@ -167,6 +186,10 @@ class _ChatScreenState extends State<ChatScreen> {
             }
             if (data['endDate'] != null) {
               _endDate = DateTime.parse(data['endDate']);
+            }
+            // Set itemId if not already set from widget
+            if (_itemId == null && itemIdFromApi != null) {
+              _itemId = itemIdFromApi;
             }
           });
         }
@@ -469,20 +492,29 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
           title: Row(
             children: [
-              // Avatar
+              // Avatar with profile image
               CircleAvatar(
                 backgroundColor: _sentBubbleColor,
                 radius: 20,
-                child: Text(
-                  widget.otherUserName.isNotEmpty
-                      ? widget.otherUserName[0].toUpperCase()
-                      : '?',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
+                backgroundImage:
+                    widget.otherUserProfileImage != null &&
+                        widget.otherUserProfileImage!.isNotEmpty
+                    ? NetworkImage(widget.otherUserProfileImage!)
+                    : null,
+                child:
+                    widget.otherUserProfileImage == null ||
+                        widget.otherUserProfileImage!.isEmpty
+                    ? Text(
+                        widget.otherUserName.isNotEmpty
+                            ? widget.otherUserName[0].toUpperCase()
+                            : '?',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      )
+                    : null,
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -664,6 +696,56 @@ class _ChatScreenState extends State<ChatScreen> {
                       ),
                     ],
                   ),
+                // View Item button
+                if (_itemId != null)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 8),
+                    child: InkWell(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => ItemDetailScreen(
+                              itemId: _itemId!,
+                              currentUserId: widget.currentUserId,
+                            ),
+                          ),
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryTeal.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: AppColors.primaryTeal.withOpacity(0.5),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.open_in_new,
+                              size: 14,
+                              color: AppColors.primaryTeal,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'View Item',
+                              style: TextStyle(
+                                color: AppColors.primaryTeal,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -807,16 +889,25 @@ class _ChatScreenState extends State<ChatScreen> {
             CircleAvatar(
               backgroundColor: _sentBubbleColor,
               radius: 16,
-              child: Text(
-                widget.otherUserName.isNotEmpty
-                    ? widget.otherUserName[0].toUpperCase()
-                    : '?',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
-                ),
-              ),
+              backgroundImage:
+                  widget.otherUserProfileImage != null &&
+                      widget.otherUserProfileImage!.isNotEmpty
+                  ? NetworkImage(widget.otherUserProfileImage!)
+                  : null,
+              child:
+                  widget.otherUserProfileImage == null ||
+                      widget.otherUserProfileImage!.isEmpty
+                  ? Text(
+                      widget.otherUserName.isNotEmpty
+                          ? widget.otherUserName[0].toUpperCase()
+                          : '?',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    )
+                  : null,
             ),
             const SizedBox(width: 8),
           ],

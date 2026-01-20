@@ -1,9 +1,11 @@
 import 'dart:math';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:rentmate/constants.dart';
 import 'package:rentmate/screens/chats/chat_screen.dart';
 import 'package:rentmate/screens/create_ad_screen.dart';
+import 'package:rentmate/theme/app_colors.dart';
 import 'dart:convert';
 import 'package:intl/intl.dart';
 
@@ -301,189 +303,239 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
-      return Scaffold(
-        backgroundColor: Colors.white,
-        body: Center(child: CircularProgressIndicator(color: Colors.black)),
+      return Container(
+        decoration: BoxDecoration(
+          gradient: AppColors.backgroundGradient,
+        ),
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          body: Center(
+            child: CircularProgressIndicator(color: AppColors.primaryTeal),
+          ),
+        ),
       );
     }
 
     if (itemData == null) {
-      return Scaffold(
-        appBar: AppBar(title: Text('Not Found')),
-        body: Center(child: Text('Item not found or deleted')),
+      return Container(
+        decoration: BoxDecoration(
+          gradient: AppColors.backgroundGradient,
+        ),
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            title: Text('Not Found'),
+          ),
+          body: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.error_outline,
+                  size: 64,
+                  color: AppColors.textSecondary,
+                ),
+                SizedBox(height: 16),
+                Text(
+                  'Item not found or deleted',
+                  style: TextStyle(color: AppColors.textSecondary),
+                ),
+              ],
+            ),
+          ),
+        ),
       );
     }
 
-    return Scaffold(
-      backgroundColor: Colors.grey[50],
-      body: CustomScrollView(
-        slivers: [
-          _buildSliverAppBar(),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+    final itemName = itemData!['itemName'] ?? 'Item Details';
+
+    return Container(
+      decoration: BoxDecoration(
+        gradient: AppColors.backgroundGradient,
+      ),
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: PreferredSize(
+          preferredSize: Size.fromHeight(kToolbarHeight),
+          child: ClipRect(
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+              child: AppBar(
+                backgroundColor: Colors.white.withOpacity(0.7),
+                surfaceTintColor: Colors.transparent,
+                foregroundColor: Colors.black,
+                elevation: 0,
+                leading: IconButton(
+                  icon: Icon(Icons.arrow_back, color: AppColors.textPrimary),
+                  onPressed: () => Navigator.pop(context),
+                ),
+                title: Text(
+                  itemName,
+                  style: TextStyle(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 18,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                actions: [
                   if (isOwner)
-                    Container(
-                      width: double.infinity,
-                      padding: EdgeInsets.all(12),
-                      margin: EdgeInsets.only(bottom: 20),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.blue.withOpacity(0.3)),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.info_outline, color: Colors.blue),
-                          SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              'This is your item. You cannot rent it.',
-                              style: TextStyle(
-                                color: Colors.blue[900],
-                                fontWeight: FontWeight.w600,
-                              ),
+                    IconButton(
+                      icon: Icon(Icons.edit, color: AppColors.textPrimary),
+                      onPressed: () async {
+                        final result = await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => CreateAdScreen(
+                              currentUserId: widget.currentUserId,
+                              itemId: widget.itemId,
                             ),
                           ),
-                        ],
-                      ),
+                        );
+                        if (result == true) {
+                          _loadItemDetails();
+                        }
+                      },
                     ),
-                  _buildHeader(),
-                  SizedBox(height: 24),
-                  _buildOwnerInfo(),
-                  SizedBox(height: 24),
-                  _buildDescription(),
-                  if (itemData!['variants'] != null &&
-                      itemData!['variants'].isNotEmpty) ...[
-                    SizedBox(height: 24),
-                    _buildVariants(),
-                  ],
-                  if (!isOwner) ...[
-                    SizedBox(height: 24),
-                    Divider(),
-                    SizedBox(height: 24),
-                    // Show appropriate input based on pricing type
-                    if (isTimeBased) ...[
-                      _buildDateSelection(),
-                      SizedBox(height: 24),
-                    ],
-                    if (isDistanceBased) ...[
-                      _buildDistanceInput(),
-                      SizedBox(height: 24),
-                    ],
-                    _buildQuantitySelector(),
-                  ],
-                  // Add bottom padding for the fixed button or scrolling
-                  SizedBox(height: 100),
                 ],
               ),
             ),
           ),
-        ],
+        ),
+        body: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Image gallery
+              _buildImageGallery(),
+              Padding(
+                padding: const EdgeInsets.all(20.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (isOwner)
+                      Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(12),
+                        margin: EdgeInsets.only(bottom: 20),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryTeal.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: AppColors.primaryTeal.withOpacity(0.3),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.info_outline,
+                              color: AppColors.primaryTeal,
+                            ),
+                            SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                'This is your item. You cannot rent it.',
+                                style: TextStyle(
+                                  color: AppColors.textPrimary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    _buildHeader(),
+                    SizedBox(height: 24),
+                    _buildOwnerInfo(),
+                    SizedBox(height: 24),
+                    _buildDescription(),
+                    if (itemData!['variants'] != null &&
+                        itemData!['variants'].isNotEmpty) ...[
+                      SizedBox(height: 24),
+                      _buildVariants(),
+                    ],
+                    if (!isOwner) ...[
+                      SizedBox(height: 24),
+                      Divider(color: AppColors.textLight.withOpacity(0.3)),
+                      SizedBox(height: 24),
+                      // Show appropriate input based on pricing type
+                      if (isTimeBased) ...[
+                        _buildDateSelection(),
+                        SizedBox(height: 24),
+                      ],
+                      if (isDistanceBased) ...[
+                        _buildDistanceInput(),
+                        SizedBox(height: 24),
+                      ],
+                      _buildQuantitySelector(),
+                    ],
+                    // Add bottom padding for the fixed button or scrolling
+                    SizedBox(height: 100),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        bottomSheet: !isOwner ? _buildBottomBar() : null,
       ),
-      bottomSheet: !isOwner ? _buildBottomBar() : null,
-      floatingActionButton: isOwner
-          ? FloatingActionButton.extended(
-              onPressed: () async {
-                final result = await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => CreateAdScreen(
-                      currentUserId: widget.currentUserId,
-                      itemId: widget.itemId,
-                    ),
-                  ),
-                );
-                // Reload item data if edit was successful
-                if (result == true) {
-                  _loadItemDetails();
-                }
-              },
-              label: Text('Edit Item'),
-              icon: Icon(Icons.edit),
-              backgroundColor: Colors.white,
-            )
-          : null,
     );
   }
 
-  Widget _buildSliverAppBar() {
+  Widget _buildImageGallery() {
     final images = itemData!['images'] as List?;
     final hasImages = images != null && images.isNotEmpty;
 
-    return SliverAppBar(
-      expandedHeight: 400.0,
-      floating: false,
-      pinned: true,
-      backgroundColor: Colors.white,
-      elevation: 0,
-      leading: Container(
-        margin: EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.9),
-          shape: BoxShape.circle,
-        ),
-        child: IconButton(
-          icon: Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
-      flexibleSpace: FlexibleSpaceBar(
-        background: Stack(
-          children: [
-            Container(color: Colors.white),
-            if (hasImages)
-              PageView.builder(
-                itemCount: images.length,
-                itemBuilder: (context, index) {
-                  return GestureDetector(
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => Scaffold(
+    return Container(
+      height: 300,
+      color: Colors.white,
+      child: hasImages
+          ? PageView.builder(
+              itemCount: images.length,
+              itemBuilder: (context, index) {
+                return GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => Scaffold(
+                          backgroundColor: Colors.black,
+                          appBar: AppBar(
                             backgroundColor: Colors.black,
-                            appBar: AppBar(
-                              backgroundColor: Colors.black,
-                              iconTheme: IconThemeData(color: Colors.white),
-                            ),
-                            body: Center(
-                              child: InteractiveViewer(
-                                child: Image.network(images[index]),
-                              ),
+                            iconTheme: IconThemeData(color: Colors.white),
+                          ),
+                          body: Center(
+                            child: InteractiveViewer(
+                              child: Image.network(images[index]),
                             ),
                           ),
                         ),
-                      );
-                    },
-                    child: Image.network(
-                      images[index],
-                      fit: BoxFit.contain,
-                      errorBuilder: (c, e, s) => Center(
-                        child: Icon(
-                          Icons.broken_image,
-                          size: 64,
-                          color: Colors.grey,
-                        ),
+                      ),
+                    );
+                  },
+                  child: Image.network(
+                    images[index],
+                    fit: BoxFit.contain,
+                    errorBuilder: (c, e, s) => Center(
+                      child: Icon(
+                        Icons.broken_image,
+                        size: 64,
+                        color: Colors.grey,
                       ),
                     ),
-                  );
-                },
-              )
-            else
-              Center(
-                child: Icon(
-                  Icons.image_not_supported,
-                  size: 64,
-                  color: Colors.grey,
-                ),
+                  ),
+                );
+              },
+            )
+          : Center(
+              child: Icon(
+                Icons.image_not_supported,
+                size: 64,
+                color: Colors.grey,
               ),
-          ],
-        ),
-      ),
+            ),
     );
   }
 

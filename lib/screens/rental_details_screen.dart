@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:ui';
 import 'package:intl/intl.dart';
 import 'package:rentmate/constants.dart';
+import 'package:rentmate/screens/return_item_form.dart';
+import 'package:rentmate/theme/app_colors.dart';
 
 class RentalDetailsScreen extends StatefulWidget {
   final String rentalId;
@@ -20,12 +23,6 @@ class RentalDetailsScreen extends StatefulWidget {
 
 class _RentalDetailsScreenState extends State<RentalDetailsScreen> {
   final String baseUrl = kBaseUrl;
-
-  // Color scheme
-  static const Color _primaryBlue = Color(0xFF2563EB);
-  static const Color _darkSlate = Color(0xFF1E293B);
-  static const Color _lightGrey = Color(0xFFF1F5F9);
-  static const Color _mediumGrey = Color(0xFF64748B);
 
   Map<String, dynamic>? _rental;
   bool _isLoading = true;
@@ -69,8 +66,60 @@ class _RentalDetailsScreenState extends State<RentalDetailsScreen> {
         ? _rental!['renterId']['_id']
         : _rental!['renterId'];
 
-    // Only show actions if status is pending AND current user is the owner (renterId)
-    if (status != 'pending' || renterId.toString() != widget.currentUserId) {
+    final isOwner = renterId.toString() == widget.currentUserId;
+
+    // Show "Mark as Returned" button for owner when status is accepted
+    if (status == 'accepted' && isOwner) {
+      return Container(
+        padding: EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: Offset(0, -2),
+            ),
+          ],
+        ),
+        child: SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: () async {
+              final result = await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ReturnItemForm(
+                    request: _rental!,
+                    currentUserId: widget.currentUserId,
+                  ),
+                ),
+              );
+              if (result == true) {
+                _fetchRentalDetails(); // Refresh after return
+              }
+            },
+            icon: Icon(Icons.assignment_return),
+            label: Text(
+              'Mark as Returned',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+              padding: EdgeInsets.symmetric(vertical: 16),
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Show Accept/Reject buttons for owner when status is pending
+    if (status != 'pending' || !isOwner) {
       return null;
     }
 
@@ -107,7 +156,7 @@ class _RentalDetailsScreenState extends State<RentalDetailsScreen> {
             child: ElevatedButton(
               onPressed: _acceptRequest,
               style: ElevatedButton.styleFrom(
-                backgroundColor: _primaryBlue,
+                backgroundColor: AppColors.primaryTeal,
                 foregroundColor: Colors.white,
                 padding: EdgeInsets.symmetric(vertical: 16),
                 elevation: 0,
@@ -188,15 +237,17 @@ class _RentalDetailsScreenState extends State<RentalDetailsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _lightGrey,
+      backgroundColor: AppColors.backgroundLight,
       appBar: AppBar(
-        backgroundColor: Colors.orange,
+        backgroundColor: AppColors.primaryTeal,
         foregroundColor: Colors.white,
         title: Text('Rental Details'),
         elevation: 0,
       ),
       body: _isLoading
-          ? Center(child: CircularProgressIndicator(color: _primaryBlue))
+          ? Center(
+              child: CircularProgressIndicator(color: AppColors.primaryTeal),
+            )
           : _rental == null
           ? _buildErrorState()
           : SingleChildScrollView(
@@ -234,17 +285,17 @@ class _RentalDetailsScreenState extends State<RentalDetailsScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.error_outline, size: 64, color: _mediumGrey),
+          Icon(Icons.error_outline, size: 64, color: AppColors.textSecondary),
           SizedBox(height: 16),
           Text(
             'Failed to load rental details',
-            style: TextStyle(fontSize: 16, color: _mediumGrey),
+            style: TextStyle(fontSize: 16, color: AppColors.textSecondary),
           ),
           SizedBox(height: 16),
           ElevatedButton(
             onPressed: _fetchRentalDetails,
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.orange,
+              backgroundColor: AppColors.primaryTeal,
               foregroundColor: Colors.white,
             ),
             child: Text('Retry'),
@@ -288,7 +339,7 @@ class _RentalDetailsScreenState extends State<RentalDetailsScreen> {
             style: TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.bold,
-              color: _darkSlate,
+              color: AppColors.textPrimary,
             ),
           ),
           if (description.isNotEmpty) ...[
@@ -297,7 +348,7 @@ class _RentalDetailsScreenState extends State<RentalDetailsScreen> {
               description,
               style: TextStyle(
                 fontSize: 14,
-                color: _mediumGrey,
+                color: AppColors.textSecondary,
                 height: 1.4,
               ),
             ),
@@ -326,14 +377,14 @@ class _RentalDetailsScreenState extends State<RentalDetailsScreen> {
       ),
       child: Row(
         children: [
-          Icon(Icons.info_outline, color: Colors.orange, size: 20),
+          Icon(Icons.info_outline, color: AppColors.primaryTeal, size: 20),
           SizedBox(width: 8),
           Text(
             'Status',
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: _darkSlate,
+              color: AppColors.textPrimary,
             ),
           ),
           Spacer(),
@@ -370,14 +421,18 @@ class _RentalDetailsScreenState extends State<RentalDetailsScreen> {
         children: [
           Row(
             children: [
-              Icon(Icons.people_outline, color: Colors.orange, size: 20),
+              Icon(
+                Icons.people_outline,
+                color: AppColors.primaryTeal,
+                size: 20,
+              ),
               SizedBox(width: 8),
               Text(
                 'Participants',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  color: _darkSlate,
+                  color: AppColors.textPrimary,
                 ),
               ),
             ],
@@ -408,10 +463,10 @@ class _RentalDetailsScreenState extends State<RentalDetailsScreen> {
           width: 40,
           height: 40,
           decoration: BoxDecoration(
-            color: _primaryBlue.withOpacity(0.1),
+            color: AppColors.primaryTeal.withOpacity(0.1),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: Icon(icon, color: _primaryBlue, size: 20),
+          child: Icon(icon, color: AppColors.primaryTeal, size: 20),
         ),
         SizedBox(width: 12),
         Expanded(
@@ -422,7 +477,7 @@ class _RentalDetailsScreenState extends State<RentalDetailsScreen> {
                 role,
                 style: TextStyle(
                   fontSize: 11,
-                  color: _mediumGrey,
+                  color: AppColors.textSecondary,
                 ),
               ),
               Text(
@@ -430,7 +485,7 @@ class _RentalDetailsScreenState extends State<RentalDetailsScreen> {
                 style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
-                  color: _darkSlate,
+                  color: AppColors.textPrimary,
                 ),
               ),
               if (email.isNotEmpty)
@@ -438,7 +493,7 @@ class _RentalDetailsScreenState extends State<RentalDetailsScreen> {
                   email,
                   style: TextStyle(
                     fontSize: 12,
-                    color: _mediumGrey,
+                    color: AppColors.textSecondary,
                   ),
                 ),
             ],
@@ -480,14 +535,18 @@ class _RentalDetailsScreenState extends State<RentalDetailsScreen> {
         children: [
           Row(
             children: [
-              Icon(Icons.calendar_today, color: Colors.orange, size: 20),
+              Icon(
+                Icons.calendar_today,
+                color: AppColors.primaryTeal,
+                size: 20,
+              ),
               SizedBox(width: 8),
               Text(
                 'Rental Period',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  color: _darkSlate,
+                  color: AppColors.textPrimary,
                 ),
               ),
             ],
@@ -519,20 +578,24 @@ class _RentalDetailsScreenState extends State<RentalDetailsScreen> {
             Container(
               padding: EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: _primaryBlue.withOpacity(0.1),
+                color: AppColors.primaryTeal.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.access_time, color: _primaryBlue, size: 18),
+                  Icon(
+                    Icons.access_time,
+                    color: AppColors.primaryTeal,
+                    size: 18,
+                  ),
                   SizedBox(width: 8),
                   Text(
                     'Total Duration: $totalDays days',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
-                      color: _primaryBlue,
+                      color: AppColors.primaryTeal,
                     ),
                   ),
                 ],
@@ -552,7 +615,7 @@ class _RentalDetailsScreenState extends State<RentalDetailsScreen> {
           label,
           style: TextStyle(
             fontSize: 12,
-            color: _mediumGrey,
+            color: AppColors.textSecondary,
           ),
         ),
         SizedBox(height: 4),
@@ -561,7 +624,7 @@ class _RentalDetailsScreenState extends State<RentalDetailsScreen> {
           style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w600,
-            color: _darkSlate,
+            color: AppColors.textPrimary,
           ),
         ),
       ],
@@ -594,14 +657,18 @@ class _RentalDetailsScreenState extends State<RentalDetailsScreen> {
         children: [
           Row(
             children: [
-              Icon(Icons.payments_outlined, color: Colors.orange, size: 20),
+              Icon(
+                Icons.payments_outlined,
+                color: AppColors.primaryTeal,
+                size: 20,
+              ),
               SizedBox(width: 8),
               Text(
                 'Pricing',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  color: _darkSlate,
+                  color: AppColors.textPrimary,
                 ),
               ),
             ],
@@ -614,7 +681,7 @@ class _RentalDetailsScreenState extends State<RentalDetailsScreen> {
           ],
           if (lateFee > 0) ...[
             SizedBox(height: 8),
-            _buildPriceRow('Late Fee', lateFee, color: Colors.orange),
+            _buildPriceRow('Late Fee', lateFee, color: AppColors.primaryTeal),
           ],
           if (damageCharge > 0) ...[
             SizedBox(height: 8),
@@ -629,7 +696,7 @@ class _RentalDetailsScreenState extends State<RentalDetailsScreen> {
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  color: _darkSlate,
+                  color: AppColors.textPrimary,
                 ),
               ),
               Text(
@@ -637,7 +704,7 @@ class _RentalDetailsScreenState extends State<RentalDetailsScreen> {
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
-                  color: _primaryBlue,
+                  color: AppColors.primaryTeal,
                 ),
               ),
             ],
@@ -655,7 +722,7 @@ class _RentalDetailsScreenState extends State<RentalDetailsScreen> {
           label,
           style: TextStyle(
             fontSize: 14,
-            color: _mediumGrey,
+            color: AppColors.textSecondary,
           ),
         ),
         Text(
@@ -663,7 +730,7 @@ class _RentalDetailsScreenState extends State<RentalDetailsScreen> {
           style: TextStyle(
             fontSize: 15,
             fontWeight: FontWeight.w600,
-            color: color ?? _darkSlate,
+            color: color ?? AppColors.textPrimary,
           ),
         ),
       ],
@@ -692,14 +759,18 @@ class _RentalDetailsScreenState extends State<RentalDetailsScreen> {
         children: [
           Row(
             children: [
-              Icon(Icons.description_outlined, color: Colors.orange, size: 20),
+              Icon(
+                Icons.description_outlined,
+                color: AppColors.primaryTeal,
+                size: 20,
+              ),
               SizedBox(width: 8),
               Text(
                 'Additional Details',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  color: _darkSlate,
+                  color: AppColors.textPrimary,
                 ),
               ),
             ],
@@ -744,14 +815,18 @@ class _RentalDetailsScreenState extends State<RentalDetailsScreen> {
         children: [
           Row(
             children: [
-              Icon(Icons.assignment_return, color: Colors.orange, size: 20),
+              Icon(
+                Icons.assignment_return,
+                color: AppColors.primaryTeal,
+                size: 20,
+              ),
               SizedBox(width: 8),
               Text(
                 'Return Information',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  color: _darkSlate,
+                  color: AppColors.textPrimary,
                 ),
               ),
             ],
@@ -770,21 +845,21 @@ class _RentalDetailsScreenState extends State<RentalDetailsScreen> {
               'Notes',
               style: TextStyle(
                 fontSize: 12,
-                color: _mediumGrey,
+                color: AppColors.textSecondary,
               ),
             ),
             SizedBox(height: 4),
             Container(
               padding: EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: _lightGrey,
+                color: AppColors.backgroundLight,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
                 damageNotes,
                 style: TextStyle(
                   fontSize: 14,
-                  color: _darkSlate,
+                  color: AppColors.textPrimary,
                 ),
               ),
             ),
@@ -806,7 +881,7 @@ class _RentalDetailsScreenState extends State<RentalDetailsScreen> {
               label,
               style: TextStyle(
                 fontSize: 13,
-                color: _mediumGrey,
+                color: AppColors.textSecondary,
               ),
             ),
           ),
@@ -816,7 +891,7 @@ class _RentalDetailsScreenState extends State<RentalDetailsScreen> {
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
-                color: _darkSlate,
+                color: AppColors.textPrimary,
               ),
             ),
           ),
@@ -831,7 +906,7 @@ class _RentalDetailsScreenState extends State<RentalDetailsScreen> {
 
     switch (status.toLowerCase()) {
       case 'pending':
-        color = Colors.orange;
+        color = AppColors.primaryTeal;
         label = 'Pending';
         break;
       case 'accepted':
@@ -859,7 +934,7 @@ class _RentalDetailsScreenState extends State<RentalDetailsScreen> {
         label = 'Rejected';
         break;
       default:
-        color = _mediumGrey;
+        color = AppColors.textSecondary;
         label = status;
     }
 
@@ -886,7 +961,7 @@ class _RentalDetailsScreenState extends State<RentalDetailsScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: Colors.orange.shade700,
+        backgroundColor: AppColors.primaryTeal,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         margin: EdgeInsets.all(16),

@@ -392,8 +392,10 @@ class _ChatListScreenState extends State<ChatListScreen> {
               requestId: chat.requestId,
               currentUserId: widget.currentUserId,
               otherUserName: chat.otherUserName,
+              otherUserProfileImage: chat.otherUserProfileImage,
               itemName: chat.itemName,
               chatId: chat.chatId,
+              itemId: chat.itemId,
             ),
           ),
         ).then((_) => _loadChats());
@@ -415,7 +417,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
         ),
         child: Row(
           children: [
-            // Item icon with status indicator
+            // Item image with status indicator
             Container(
               width: 56,
               height: 56,
@@ -425,12 +427,31 @@ class _ChatListScreenState extends State<ChatListScreen> {
               ),
               child: Stack(
                 children: [
-                  Center(
-                    child: Icon(
-                      Icons.inventory_2_rounded,
-                      color: AppColors.primaryTeal,
-                      size: 28,
-                    ),
+                  // Item image or fallback icon
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(14),
+                    child: chat.itemImage != null
+                        ? Image.network(
+                            chat.itemImage!,
+                            width: 56,
+                            height: 56,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) =>
+                                Center(
+                                  child: Icon(
+                                    Icons.inventory_2_rounded,
+                                    color: AppColors.primaryTeal,
+                                    size: 28,
+                                  ),
+                                ),
+                          )
+                        : Center(
+                            child: Icon(
+                              Icons.inventory_2_rounded,
+                              color: AppColors.primaryTeal,
+                              size: 28,
+                            ),
+                          ),
                   ),
                   // Status dot
                   Positioned(
@@ -654,7 +675,10 @@ class ChatPreview {
   final String chatId;
   final String requestId;
   final String otherUserName;
+  final String? otherUserProfileImage;
   final String itemName;
+  final String? itemImage;
+  final String? itemId;
   final String lastMessage;
   final DateTime lastMessageTime;
   final int unreadCount;
@@ -667,7 +691,10 @@ class ChatPreview {
     required this.chatId,
     required this.requestId,
     required this.otherUserName,
+    this.otherUserProfileImage,
     required this.itemName,
+    this.itemImage,
+    this.itemId,
     required this.lastMessage,
     required this.lastMessageTime,
     this.unreadCount = 0,
@@ -683,29 +710,43 @@ class ChatPreview {
 
     String reqId = '';
     String itemName = 'Unknown Item';
+    String? itemImage;
+    String? itemId;
     String otherName = 'Unknown User';
+    String? otherProfileImage;
 
     if (requestIdObj != null) {
       reqId = requestIdObj['_id'] ?? '';
       if (requestIdObj['itemId'] != null) {
         itemName = requestIdObj['itemId']['itemName'] ?? 'Unknown Item';
+        itemId = requestIdObj['itemId']['_id'];
+        final images = requestIdObj['itemId']['images'] as List?;
+        if (images != null && images.isNotEmpty) {
+          itemImage = images[0];
+        }
       }
     }
 
     if (participants != null && participants.isNotEmpty) {
       otherName = participants[0]['name'] ?? 'Unknown User';
+      otherProfileImage = participants[0]['profileImage'];
     }
 
     // Use otherUser if available (better approach from backend)
     if (json['otherUser'] != null) {
       otherName = json['otherUser']['name'] ?? otherName;
+      otherProfileImage =
+          json['otherUser']['profileImage'] ?? otherProfileImage;
     }
 
     return ChatPreview(
       chatId: json['_id'] ?? '',
       requestId: reqId,
       otherUserName: otherName,
+      otherUserProfileImage: otherProfileImage,
       itemName: itemName,
+      itemImage: itemImage,
+      itemId: itemId,
       lastMessage: json['lastMessage'] ?? '',
       lastMessageTime: DateTime.parse(json['lastMessageTime']),
       unreadCount: json['unreadCount'] ?? 0,
