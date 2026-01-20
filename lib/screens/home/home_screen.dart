@@ -9,6 +9,7 @@ import 'package:rentmate/screens/notifications/notification_screen.dart';
 import 'package:rentmate/theme/app_colors.dart';
 import 'package:rentmate/widgets/ui_components.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:rentmate/services/location_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -25,6 +26,9 @@ class _HomeScreenState extends State<HomeScreen> {
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _searchController = TextEditingController();
 
+  String _location = 'Azhikode';
+  final LocationService _locationService = LocationService();
+
   @override
   void initState() {
     super.initState();
@@ -38,10 +42,119 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
+  Future<void> _loadStoredLocation() async {
+    final saved = await _locationService.getSavedLocation();
+    if (saved != null && mounted) {
+      setState(() => _location = saved);
+    }
+  }
+
+  Future<void> _getCurrentLocation() async {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Fetching location...')),
+    );
+
+    final pos = await _locationService.getCurrentPosition();
+    if (pos != null) {
+      final place = await _locationService.getPlaceName(
+        pos.latitude,
+        pos.longitude,
+      );
+      if (place != null && mounted) {
+        await _locationService.saveLocation(place);
+        setState(() => _location = place);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Location updated to $place')),
+        );
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not get location. Check permissions.')),
+        );
+      }
+    }
+  }
+
+  void _showLocationPicker() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Container(
+        padding: EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Select Location',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            SizedBox(height: 20),
+            ListTile(
+              leading: Icon(Icons.my_location, color: AppColors.primaryTeal),
+              title: Text('Use Current Location'),
+              onTap: () {
+                Navigator.pop(context);
+                _getCurrentLocation();
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.search, color: Colors.grey),
+              title: Text('Enter Manually'),
+              onTap: () {
+                Navigator.pop(context);
+                _showManualLocationDialog();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showManualLocationDialog() {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Enter Location'),
+        backgroundColor: Colors.white,
+        content: TextField(
+          controller: controller,
+          decoration: InputDecoration(
+            hintText: 'City, Area, etc.',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          TextButton(
+            onPressed: () {
+              if (controller.text.isNotEmpty) {
+                _locationService.saveLocation(controller.text);
+                setState(() => _location = controller.text);
+                Navigator.pop(context);
+              }
+            },
+            child: Text('Save', style: TextStyle(color: AppColors.primaryTeal)),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _initialize() async {
     final prefs = await SharedPreferences.getInstance();
     storedUserId = prefs.getString('user_id');
     _loadItems();
+    _loadStoredLocation();
   }
 
   Future<void> _loadItems({bool showLoading = true}) async {
@@ -142,40 +255,43 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const Spacer(),
                     // Location Pill with teal
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            AppColors.primaryTeal.withOpacity(0.1),
-                            AppColors.primaryTealLight.withOpacity(0.05),
+                    GestureDetector(
+                      onTap: _showLocationPicker,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              AppColors.primaryTeal.withOpacity(0.1),
+                              AppColors.primaryTealLight.withOpacity(0.05),
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: AppColors.primaryTeal.withOpacity(0.3),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.location_on,
+                              size: 16,
+                              color: AppColors.primaryTeal,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              _location,
+                              style: TextStyle(
+                                color: AppColors.textPrimary,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                           ],
                         ),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: AppColors.primaryTeal.withOpacity(0.3),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.location_on,
-                            size: 16,
-                            color: AppColors.primaryTeal,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            'Azhikode',
-                            style: TextStyle(
-                              color: AppColors.textPrimary,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
                       ),
                     ),
                     const SizedBox(width: 12),
