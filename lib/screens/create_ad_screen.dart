@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:io';
+import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
@@ -172,12 +172,11 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
           await _loadSubCategories(selectedCategoryId!);
         }
 
-        // Load existing images
+        // Load existing images - don't create File objects on web
         final images = item['images'] as List? ?? [];
         imagesList = images
             .map(
               (url) => ImageData(
-                file: File(''),
                 url: url.toString(),
                 isExisting: true,
               ),
@@ -249,10 +248,14 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
       try {
         final uri = Uri.parse('$baseUrl/api/upload');
         final request = http.MultipartRequest('POST', uri);
+
+        // Read file as bytes for web compatibility
+        final bytes = await pickedFile.readAsBytes();
         request.files.add(
-          await http.MultipartFile.fromPath(
+          http.MultipartFile.fromBytes(
             'image',
-            pickedFile.path,
+            bytes,
+            filename: pickedFile.name,
             contentType: MediaType('image', 'jpeg'),
           ),
         );
@@ -265,7 +268,6 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
           setState(() {
             imagesList.add(
               ImageData(
-                file: File(pickedFile.path),
                 url: data['url'],
                 isExisting: false,
               ),
@@ -273,6 +275,7 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
           });
         }
       } catch (e) {
+        log(e.toString());
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to upload image')),
         );
@@ -306,10 +309,14 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
       try {
         final uri = Uri.parse('$baseUrl/api/upload');
         final request = http.MultipartRequest('POST', uri);
+
+        // Read file as bytes for web compatibility
+        final bytes = await pickedFile.readAsBytes();
         request.files.add(
-          await http.MultipartFile.fromPath(
+          http.MultipartFile.fromBytes(
             'image',
-            pickedFile.path,
+            bytes,
+            filename: pickedFile.name,
             contentType: MediaType('image', 'jpeg'),
           ),
         );
@@ -1062,9 +1069,7 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(12),
                       image: DecorationImage(
-                        image: img.isExisting
-                            ? NetworkImage(img.url)
-                            : FileImage(img.file) as ImageProvider,
+                        image: NetworkImage(img.url),
                         fit: BoxFit.cover,
                       ),
                     ),
@@ -1365,12 +1370,10 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
 }
 
 class ImageData {
-  final File file;
   final String url;
   final bool isExisting;
 
   ImageData({
-    required this.file,
     required this.url,
     this.isExisting = false,
   });

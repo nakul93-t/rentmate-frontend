@@ -45,6 +45,7 @@ dependencies:
   curved_navigation_bar: ^1.0.6
   geolocator: ^14.0.2
   geocoding: ^4.0.0
+  cached_network_image: ^3.4.1
 
 dev_dependencies:
   flutter_test:

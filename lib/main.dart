@@ -1,11 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:rentmate/screens/app_shell.dart';
 import 'package:rentmate/screens/login_screen.dart';
+import 'package:rentmate/screens/home/providers/home_provider.dart';
+import 'package:rentmate/screens/home/providers/review_provider.dart';
 import 'package:rentmate/theme/app_theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => HomeProvider()),
+        ChangeNotifierProvider(create: (_) => ReviewProvider()),
+      ],
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {

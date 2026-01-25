@@ -126,6 +126,31 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
       }
     }
 
+    // Check availability for time-based items before proceeding
+    if (isTimeBased && startDate != null && endDate != null) {
+      try {
+        final availabilityResponse = await http.get(
+          Uri.parse(
+            '$kBaseUrl/item/availability/${widget.itemId}?startDate=${startDate!.toIso8601String()}&endDate=${endDate!.toIso8601String()}',
+          ),
+        );
+
+        if (availabilityResponse.statusCode == 200) {
+          final availability = json.decode(availabilityResponse.body);
+          if (availability['isAvailable'] == false) {
+            _showErrorSnackBar(
+              availability['message'] ??
+                  'Item not available for selected dates',
+            );
+            return;
+          }
+        }
+      } catch (e) {
+        print('Error checking availability: $e');
+        // Continue anyway if availability check fails
+      }
+    }
+
     setState(() => isRequesting = true);
 
     try {

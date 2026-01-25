@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:provider/provider.dart';
 import 'package:rentmate/constants.dart';
-import 'package:rentmate/screens/home/home_screen.dart'; // using ItemWidget
+import 'package:rentmate/models/item_model.dart';
+import 'package:rentmate/screens/home/widgets/item_card.dart';
+import 'package:rentmate/screens/home/providers/review_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class CategoryItemsScreen extends StatefulWidget {
@@ -20,7 +23,7 @@ class CategoryItemsScreen extends StatefulWidget {
 }
 
 class _CategoryItemsScreenState extends State<CategoryItemsScreen> {
-  List<dynamic> items = [];
+  List<ItemModel> items = [];
   List<dynamic> subCategories = [];
   String? selectedSubCategoryId;
   bool isLoadingItems = true;
@@ -83,7 +86,8 @@ class _CategoryItemsScreenState extends State<CategoryItemsScreen> {
         final data = json.decode(response.body);
         if (mounted) {
           setState(() {
-            items = data['items'] ?? [];
+            final itemsJson = data['items'] as List? ?? [];
+            items = itemsJson.map((json) => ItemModel.fromJson(json)).toList();
             isLoadingItems = false;
           });
         }
@@ -218,9 +222,13 @@ class _CategoryItemsScreenState extends State<CategoryItemsScreen> {
                     ),
                     itemCount: items.length,
                     itemBuilder: (context, index) {
+                      final item = items[index];
+                      final reviewProvider = context.watch<ReviewProvider>();
                       return ItemCard(
-                        item: items[index],
+                        item: item,
                         currentUserId: currentUserId,
+                        rating: reviewProvider.getRating(item.id),
+                        reviewCount: reviewProvider.getReviewCount(item.id),
                       );
                     },
                   ),
