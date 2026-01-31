@@ -500,11 +500,8 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
             ),
           ),
         );
-        if (isEditMode) {
-          Navigator.pop(context, true);
-        } else {
-          _clearForm();
-        }
+        // Navigate back with true to refresh the listings
+        Navigator.pop(context, true);
       } else {
         throw Exception('Failed to ${isEditMode ? 'update' : 'post'} item');
       }
