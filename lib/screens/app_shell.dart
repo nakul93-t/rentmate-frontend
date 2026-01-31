@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:rentmate/screens/chats/chat_list_screen.dart';
 import 'package:rentmate/screens/create_ad_screen.dart';
@@ -6,6 +7,7 @@ import 'package:rentmate/screens/profile_screen.dart';
 import 'package:rentmate/screens/my_listings_screen.dart';
 import 'package:rentmate/theme/app_colors.dart';
 import 'package:rentmate/widgets/glassmorphic_container.dart';
+import 'package:rentmate/services/notification_service.dart';
 
 class AppShell extends StatefulWidget {
   final String currentUserId;
@@ -21,10 +23,53 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   int _selectedIndex = 0;
+  int _unreadNotificationCount = 0;
+  Timer? _notificationPollingTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchUnreadCount();
+    _startNotificationPolling();
+  }
+
+  @override
+  void dispose() {
+    _notificationPollingTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startNotificationPolling() {
+    // Poll every 30 seconds
+    _notificationPollingTimer = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) => _fetchUnreadCount(),
+    );
+  }
+
+  Future<void> _fetchUnreadCount() async {
+    final count = await NotificationService.getUnreadCount(
+      widget.currentUserId,
+    );
+    if (mounted && count != _unreadNotificationCount) {
+      setState(() {
+        _unreadNotificationCount = count;
+      });
+    }
+  }
+
+  /// Public method to refresh notification count after navigation returns
+  void refreshNotificationCount() {
+    _fetchUnreadCount();
+  }
 
   List<Widget> _getPages() {
     return [
-      HomeScreen(),
+      HomeScreen(
+        currentUserId: widget.currentUserId,
+        unreadNotificationCount: _unreadNotificationCount,
+        onNotificationViewed: _fetchUnreadCount,
+      ),
       ChatListScreen(currentUserId: widget.currentUserId),
       MyListingsScreen(currentUserId: widget.currentUserId),
       ProfileScreen(),

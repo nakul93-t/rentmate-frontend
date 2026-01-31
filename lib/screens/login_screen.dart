@@ -89,8 +89,8 @@ class _LoginScreenState extends State<LoginScreen>
                         borderRadius: 24,
                         child: Image.asset(
                           'assets/images/app logo.png',
-                          width: 80,
-                          height: 80,
+                          width: 150,
+                          height: 150,
                         ),
                       ),
 

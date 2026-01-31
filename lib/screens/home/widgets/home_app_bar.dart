@@ -6,11 +6,17 @@ import '../../../screens/notifications/notification_screen.dart';
 class HomeAppBar extends StatelessWidget {
   final String location;
   final VoidCallback onLocationTap;
+  final int unreadNotificationCount;
+  final String currentUserId;
+  final VoidCallback? onNotificationViewed;
 
   const HomeAppBar({
     super.key,
     required this.location,
     required this.onLocationTap,
+    this.unreadNotificationCount = 0,
+    required this.currentUserId,
+    this.onNotificationViewed,
   });
 
   @override
@@ -82,13 +88,18 @@ class HomeAppBar extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 12),
-            // Notification Button
+            // Notification Button with Badge
             GestureDetector(
-              onTap: () {
-                Navigator.push(
+              onTap: () async {
+                await Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => NotificationScreen()),
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        NotificationScreen(currentUserId: currentUserId),
+                  ),
                 );
+                // Refresh notification count after returning
+                onNotificationViewed?.call();
               },
               child: Container(
                 padding: const EdgeInsets.all(10),
@@ -104,10 +115,45 @@ class HomeAppBar extends StatelessWidget {
                     ),
                   ],
                 ),
-                child: Icon(
-                  Icons.notifications_outlined,
-                  color: AppColors.textPrimary,
-                  size: 22,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Icon(
+                      Icons.notifications_outlined,
+                      color: AppColors.textPrimary,
+                      size: 22,
+                    ),
+                    // Badge for unread notifications
+                    if (unreadNotificationCount > 0)
+                      Positioned(
+                        right: -6,
+                        top: -6,
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: Colors.red,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 1.5),
+                          ),
+                          constraints: const BoxConstraints(
+                            minWidth: 18,
+                            minHeight: 18,
+                          ),
+                          child: Center(
+                            child: Text(
+                              unreadNotificationCount > 99
+                                  ? '99+'
+                                  : unreadNotificationCount.toString(),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ),

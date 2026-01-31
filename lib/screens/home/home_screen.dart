@@ -12,7 +12,16 @@ import 'package:rentmate/screens/home/widgets/featured_banner.dart';
 import 'package:rentmate/screens/home/widgets/home_app_bar.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final String? currentUserId;
+  final int unreadNotificationCount;
+  final VoidCallback? onNotificationViewed;
+
+  const HomeScreen({
+    super.key,
+    this.currentUserId,
+    this.unreadNotificationCount = 0,
+    this.onNotificationViewed,
+  });
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -173,6 +182,9 @@ class _HomeScreenState extends State<HomeScreen> {
             HomeAppBar(
               location: _location,
               onLocationTap: _showLocationPicker,
+              unreadNotificationCount: widget.unreadNotificationCount,
+              currentUserId: widget.currentUserId ?? storedUserId ?? '',
+              onNotificationViewed: widget.onNotificationViewed,
             ),
 
             // Search Bar with pill style
