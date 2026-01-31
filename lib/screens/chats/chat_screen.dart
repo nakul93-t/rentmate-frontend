@@ -202,17 +202,26 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _acceptRequest() async {
     setState(() => _isAccepting = true);
     try {
+      // Determine new status based on current status
+      // inquiry → pending (customer needs to submit dates)
+      // pending → accepted (normal flow)
+      final newStatus = _requestStatus == 'inquiry' ? 'pending' : 'accepted';
+
       final response = await http.put(
         Uri.parse('$kBaseUrl/rent-request/${widget.requestId}/status'),
         headers: {'Content-Type': 'application/json'},
-        body: json.encode({'status': 'accepted'}),
+        body: json.encode({'status': newStatus}),
       );
 
       if (response.statusCode == 200) {
-        setState(() => _requestStatus = 'accepted');
+        setState(() => _requestStatus = newStatus);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Request accepted!'),
+            content: Text(
+              _requestStatus == 'pending'
+                  ? 'Inquiry acknowledged! Waiting for customer to submit rental dates.'
+                  : 'Request accepted!',
+            ),
             backgroundColor: AppColors.success,
           ),
         );
@@ -750,8 +759,9 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ),
 
-          // Show actions only for renter (owner) when pending
-          if (_isRenter && _requestStatus == 'pending')
+          // Show actions only for renter (owner) when pending or inquiry
+          if (_isRenter &&
+              (_requestStatus == 'pending' || _requestStatus == 'inquiry'))
             Container(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
               child: Row(

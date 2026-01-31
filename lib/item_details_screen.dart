@@ -33,6 +33,11 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
   bool isRequesting = false;
   final _distanceController = TextEditingController();
 
+  // Existing request tracking
+  String? existingRequestId;
+  String? existingRequestStatus;
+  String? existingRenterName;
+
   // Helper getters for pricing type
   bool get isDistanceBased => ['km', 'mile'].contains(itemData?['priceUnit']);
   bool get isTripBased => itemData?['priceUnit'] == 'trip';
@@ -97,6 +102,11 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
           );
           isLoading = false;
         });
+
+        // Check for existing request (don't check if user is owner)
+        if (!isOwner) {
+          await _checkExistingRequest();
+        }
       } else {
         print('Failed to load item details: ${response.body}');
         if (mounted) setState(() => isLoading = false);
@@ -104,6 +114,38 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
     } catch (e) {
       print('Error loading item: $e');
       if (mounted) setState(() => isLoading = false);
+    }
+  }
+
+  Future<void> _checkExistingRequest() async {
+    try {
+      final response = await http.get(
+        Uri.parse(
+          '$kBaseUrl/rent-request/check-existing?itemId=${widget.itemId}&customerId=${widget.currentUserId}',
+        ),
+      );
+
+      print(
+        'DEBUG checkExistingRequest: Response status=${response.statusCode}',
+      );
+      print('DEBUG checkExistingRequest: Response body=${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['hasExistingRequest'] == true && mounted) {
+          setState(() {
+            existingRequestId = data['request']['_id'];
+            existingRequestStatus = data['request']['status'];
+            existingRenterName = data['request']['renterName'];
+          });
+          print(
+            'DEBUG: Existing request found: $existingRequestId, status: $existingRequestStatus',
+          );
+        }
+      }
+    } catch (e) {
+      print('Error checking existing request: $e');
+      // Don't block UI if this fails
     }
   }
 
@@ -199,11 +241,22 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
             double.tryParse(_distanceController.text) ?? 0;
       }
 
-      final response = await http.post(
-        Uri.parse('$kBaseUrl/rent-request'),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode(requestBody),
-      );
+      http.Response response;
+
+      // If there's an existing request in pending status, update it instead of creating new
+      if (existingRequestId != null && existingRequestStatus == 'pending') {
+        response = await http.put(
+          Uri.parse('$kBaseUrl/rent-request/$existingRequestId'),
+          headers: {'Content-Type': 'application/json'},
+          body: json.encode(requestBody),
+        );
+      } else {
+        response = await http.post(
+          Uri.parse('$kBaseUrl/rent-request'),
+          headers: {'Content-Type': 'application/json'},
+          body: json.encode(requestBody),
+        );
+      }
 
       if (response.statusCode == 201 || response.statusCode == 200) {
         final rentRequest = json.decode(response.body);
@@ -497,7 +550,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                       _buildQuantitySelector(),
                     ],
                     // Add bottom padding for the fixed button or scrolling
-                    SizedBox(height: 100),
+                    SizedBox(height: 160),
                   ],
                 ),
               ),
@@ -1212,6 +1265,37 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
     }
     // For trip-based, quantity > 0 is enough (default is 1)
 
+    // Get status display text and color
+    String getStatusDisplayText(String? status) {
+      switch (status) {
+        case 'inquiry':
+          return 'Inquiry Sent';
+        case 'pending':
+          return 'Request Pending';
+        case 'accepted':
+          return 'Request Accepted';
+        case 'active':
+          return 'Currently Renting';
+        default:
+          return 'Request Active';
+      }
+    }
+
+    Color getStatusColor(String? status) {
+      switch (status) {
+        case 'inquiry':
+          return Colors.blue;
+        case 'pending':
+          return Colors.orange;
+        case 'accepted':
+          return Colors.green;
+        case 'active':
+          return AppColors.primaryTeal;
+        default:
+          return Colors.grey;
+      }
+    }
+
     return Container(
       padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -1228,90 +1312,266 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Price row
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+            // Show existing request banner if user has one
+            if (existingRequestId != null && !isOwner) ...[
+              Container(
+                width: double.infinity,
+                padding: EdgeInsets.all(12),
+                margin: EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: getStatusColor(existingRequestStatus).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: getStatusColor(
+                      existingRequestStatus,
+                    ).withOpacity(0.3),
+                  ),
+                ),
+                child: Row(
                   children: [
-                    Text(
-                      'Total Price',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[600],
-                      ),
+                    Icon(
+                      existingRequestStatus == 'active'
+                          ? Icons.check_circle
+                          : Icons.info_outline,
+                      color: getStatusColor(existingRequestStatus),
+                      size: 20,
                     ),
-                    Text(
-                      '₹${total.toStringAsFixed(0)}',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        getStatusDisplayText(existingRequestStatus),
+                        style: TextStyle(
+                          color: getStatusColor(existingRequestStatus),
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
                       ),
                     ),
                   ],
                 ),
-              ],
-            ),
-            SizedBox(height: 12),
-            // Buttons row
-            if (!isOwner)
-              Row(
-                children: [
-                  // Chat button
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: !isRequesting ? _chatWithOwner : null,
-                      icon: Icon(Icons.chat_bubble_outline),
-                      label: Text('Chat'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.black,
-                        side: BorderSide(color: Colors.grey[400]!),
-                        padding: EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+              ),
+              // For pending status: Show Request to Rent button (with dates)
+              // For other statuses: Show View Conversation only
+              if (existingRequestStatus == 'pending') ...[
+                // Show price and Request to Rent button for pending requests
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Total Price',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                          ),
                         ),
-                      ),
+                        Text(
+                          '₹${total.toStringAsFixed(0)}',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                  SizedBox(width: 12),
-                  // Request to Rent button
-                  Expanded(
-                    flex: 2,
-                    child: ElevatedButton(
-                      onPressed: canBook && !isRequesting
-                          ? _requestToRent
-                          : null,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.black,
-                        foregroundColor: Colors.white,
-                        padding: EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        elevation: 0,
-                        disabledBackgroundColor: Colors.grey[300],
-                      ),
-                      child: isRequesting
-                          ? SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : Text(
-                              'Request to Rent',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
+                  ],
+                ),
+                SizedBox(height: 12),
+                Row(
+                  children: [
+                    // View Conversation button (smaller)
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => ChatScreen(
+                                requestId: existingRequestId!,
+                                currentUserId: widget.currentUserId,
+                                otherUserName: existingRenterName ?? 'Owner',
+                                itemName: itemData!['itemName'] ?? 'Item',
                               ),
                             ),
+                          );
+                        },
+                        icon: Icon(Icons.chat_bubble_outline),
+                        label: Text('Chat'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.black,
+                          side: BorderSide(color: Colors.grey[400]!),
+                          padding: EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
                     ),
+                    SizedBox(width: 12),
+                    // Submit Dates button
+                    Expanded(
+                      flex: 2,
+                      child: ElevatedButton(
+                        onPressed: canBook && !isRequesting
+                            ? _requestToRent
+                            : null,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.black,
+                          foregroundColor: Colors.white,
+                          padding: EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          elevation: 0,
+                          disabledBackgroundColor: Colors.grey[300],
+                        ),
+                        child: isRequesting
+                            ? SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : Text(
+                                'Submit Dates',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                      ),
+                    ),
+                  ],
+                ),
+              ] else ...[
+                // View Existing Conversation button (for inquiry, accepted, active)
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ChatScreen(
+                            requestId: existingRequestId!,
+                            currentUserId: widget.currentUserId,
+                            otherUserName: existingRenterName ?? 'Owner',
+                            itemName: itemData!['itemName'] ?? 'Item',
+                          ),
+                        ),
+                      );
+                    },
+                    icon: Icon(Icons.chat),
+                    label: Text(
+                      'View Conversation',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.black,
+                      foregroundColor: Colors.white,
+                      padding: EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      elevation: 0,
+                    ),
+                  ),
+                ),
+              ],
+            ] else ...[
+              // Original UI when no existing request
+              // Price row
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Total Price',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                      Text(
+                        '₹${total.toStringAsFixed(0)}',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
+              SizedBox(height: 12),
+              // Buttons row
+              if (!isOwner)
+                Row(
+                  children: [
+                    // Chat button
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: !isRequesting ? _chatWithOwner : null,
+                        icon: Icon(Icons.chat_bubble_outline),
+                        label: Text('Chat'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.black,
+                          side: BorderSide(color: Colors.grey[400]!),
+                          padding: EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 12),
+                    // Request to Rent button
+                    Expanded(
+                      flex: 2,
+                      child: ElevatedButton(
+                        onPressed: canBook && !isRequesting
+                            ? _requestToRent
+                            : null,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.black,
+                          foregroundColor: Colors.white,
+                          padding: EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          elevation: 0,
+                          disabledBackgroundColor: Colors.grey[300],
+                        ),
+                        child: isRequesting
+                            ? SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : Text(
+                                'Request to Rent',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                      ),
+                    ),
+                  ],
+                ),
+            ],
           ],
         ),
       ),
