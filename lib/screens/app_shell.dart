@@ -42,7 +42,7 @@ class _AppShellState extends State<AppShell> {
   void _startNotificationPolling() {
     // Poll every 30 seconds
     _notificationPollingTimer = Timer.periodic(
-      const Duration(seconds: 30),
+      const Duration(seconds: 5),
       (_) => _fetchUnreadCount(),
     );
   }

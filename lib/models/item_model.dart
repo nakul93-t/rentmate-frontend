@@ -7,6 +7,11 @@ class ItemModel {
   final List<String> images;
   final bool isActive;
 
+  // Location fields
+  final String? location;
+  final bool pickupEnabled;
+  final String? pickupAddress;
+
   // Optional fields
   final CategoryInfo? category;
   final SubCategoryInfo? subCategory;
@@ -19,6 +24,9 @@ class ItemModel {
     required this.priceUnit,
     required this.images,
     required this.isActive,
+    this.location,
+    this.pickupEnabled = false,
+    this.pickupAddress,
     this.category,
     this.subCategory,
   });
@@ -42,6 +50,9 @@ class ItemModel {
       priceUnit: json['priceUnit'] ?? 'day',
       images: List<String>.from(json['images'] ?? []),
       isActive: json['isActive'] ?? true,
+      location: json['location'],
+      pickupEnabled: json['pickupEnabled'] ?? false,
+      pickupAddress: json['pickupAddress'],
       category: json['categoryId'] != null
           ? CategoryInfo.fromJson(json['categoryId'])
           : null,
@@ -53,6 +64,17 @@ class ItemModel {
 
   String get firstImage => images.isNotEmpty ? images[0] : '';
   bool get hasImage => images.isNotEmpty;
+
+  // Display location: pickup address if available, else location
+  String? get displayLocation {
+    if (pickupEnabled && pickupAddress != null && pickupAddress!.isNotEmpty) {
+      return pickupAddress;
+    }
+    return location;
+  }
+
+  bool get hasLocation =>
+      displayLocation != null && displayLocation!.isNotEmpty;
 }
 
 class CategoryInfo {

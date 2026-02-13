@@ -247,21 +247,59 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _rejectRequest() async {
+    final reasonController = TextEditingController();
+
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Reject Request'),
-        content: Text('Are you sure you want to reject this rental request?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text('Reject', style: TextStyle(color: AppColors.error)),
-          ),
-        ],
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) {
+          String? errorText;
+          return AlertDialog(
+            title: Text('Reject Request'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Are you sure you want to reject this rental request?'),
+                SizedBox(height: 16),
+                TextField(
+                  controller: reasonController,
+                  decoration: InputDecoration(
+                    hintText: 'Reason for rejection (required)',
+                    errorText: errorText,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                  ),
+                  maxLines: 3,
+                  onChanged: (_) {
+                    if (errorText != null) setState(() => errorText = null);
+                  },
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () {
+                  if (reasonController.text.trim().isEmpty) {
+                    setState(() => errorText = 'Reason is required');
+                    return;
+                  }
+                  Navigator.pop(context, true);
+                },
+                child: Text('Reject', style: TextStyle(color: AppColors.error)),
+              ),
+            ],
+          );
+        },
       ),
     );
 
@@ -272,7 +310,10 @@ class _ChatScreenState extends State<ChatScreen> {
       final response = await http.put(
         Uri.parse('$kBaseUrl/rent-request/${widget.requestId}/status'),
         headers: {'Content-Type': 'application/json'},
-        body: json.encode({'status': 'rejected'}),
+        body: json.encode({
+          'status': 'rejected',
+          'rejectionReason': reasonController.text.trim(),
+        }),
       );
 
       if (response.statusCode == 200) {

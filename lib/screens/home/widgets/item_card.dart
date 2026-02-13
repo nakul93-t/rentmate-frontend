@@ -158,6 +158,33 @@ class ItemCard extends StatelessWidget {
                       ],
                     ),
 
+                    // Location
+                    if (item.hasLocation)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.location_on_outlined,
+                              size: 12,
+                              color: AppColors.textSecondary,
+                            ),
+                            const SizedBox(width: 2),
+                            Expanded(
+                              child: Text(
+                                item.displayLocation!,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: AppColors.textSecondary,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
                     // Price
                     Text(
                       '₹${item.basePrice}/${item.priceUnit}',

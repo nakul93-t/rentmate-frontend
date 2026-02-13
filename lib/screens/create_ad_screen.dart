@@ -47,6 +47,14 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
   List<ImageData> imagesList = [];
   List<VariantInput> variants = [VariantInput()];
 
+  // Location and pickup fields
+  final _locationController = TextEditingController();
+  final _pickupAddressController = TextEditingController();
+  bool pickupEnabled = false;
+  bool sameAsLocation = false;
+  List<Map<String, dynamic>> savedAddresses = [];
+  String? selectedSavedAddressId;
+
   bool isLoading = false;
   bool isUploadingImage = false;
   bool isLoadingCategories = true;
@@ -59,6 +67,7 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
     super.initState();
     _loadCategories();
     _loadPriceUnits();
+    _loadSavedAddresses();
     if (isEditMode) {
       _loadExistingItem();
     }
@@ -71,6 +80,8 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
     _descriptionController.dispose();
     _depositController.dispose();
     _minChargeController.dispose();
+    _locationController.dispose();
+    _pickupAddressController.dispose();
     _lateFeeController.dispose();
     super.dispose();
   }
@@ -120,6 +131,89 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
           {'value': 'trip', 'label': 'Per Trip', 'category': 'fixed'},
         ];
       });
+    }
+  }
+
+  Future<void> _loadSavedAddresses() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/saved-address/user/${widget.currentUserId}'),
+      );
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        setState(() {
+          savedAddresses = List<Map<String, dynamic>>.from(data['data'] ?? []);
+        });
+      }
+    } catch (e) {
+      // Ignore - saved addresses are optional
+    }
+  }
+
+  Future<void> _saveNewAddress(String label, String address) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/saved-address'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'userId': widget.currentUserId,
+          'label': label,
+          'address': address,
+        }),
+      );
+      if (response.statusCode == 201) {
+        _loadSavedAddresses();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Address saved!')),
+        );
+      }
+    } catch (e) {
+      // Ignore
+    }
+  }
+
+  Future<void> _showSaveAddressDialog() async {
+    final labelController = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Save Address'),
+        content: TextField(
+          controller: labelController,
+          autofocus: true,
+          decoration: InputDecoration(
+            hintText: 'Label (e.g., Home, Office)',
+            filled: true,
+            fillColor: _lightGrey,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel', style: TextStyle(color: _mediumGrey)),
+          ),
+          ElevatedButton(
+            onPressed: () =>
+                Navigator.pop(context, labelController.text.trim()),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _primaryBlue,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: Text('Save', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (result != null && result.isNotEmpty) {
+      _saveNewAddress(result, _locationController.text);
     }
   }
 
@@ -200,6 +294,15 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
               );
             },
           ).toList();
+        }
+
+        // Load location and pickup fields
+        _locationController.text = item['location'] ?? '';
+        pickupEnabled = item['pickupEnabled'] ?? false;
+        _pickupAddressController.text = item['pickupAddress'] ?? '';
+        if (pickupEnabled &&
+            _pickupAddressController.text == _locationController.text) {
+          sameAsLocation = true;
         }
 
         setState(() => isLoadingItem = false);
@@ -473,6 +576,12 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
           },
         ).toList(),
         'createdBy': widget.currentUserId,
+        // Location and pickup fields
+        if (_locationController.text.isNotEmpty)
+          'location': _locationController.text,
+        'pickupEnabled': pickupEnabled,
+        if (pickupEnabled && _pickupAddressController.text.isNotEmpty)
+          'pickupAddress': _pickupAddressController.text,
       };
 
       http.Response response;
@@ -840,6 +949,142 @@ class _CreateAdScreenState extends State<CreateAdScreen> {
                         icon: Icons.access_time,
                         keyboardType: TextInputType.number,
                       ),
+                    ],
+                  ],
+                ),
+              ),
+
+              // Location & Pickup Section
+              _buildSectionCard(
+                title: 'Location & Pickup',
+                icon: Icons.location_on_outlined,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Saved address dropdown
+                    if (savedAddresses.isNotEmpty) ...[
+                      _buildModernDropdown<String>(
+                        value: selectedSavedAddressId,
+                        label: 'Select Saved Address',
+                        icon: Icons.bookmark_outline,
+                        items: savedAddresses
+                            .map(
+                              (addr) => DropdownMenuItem<String>(
+                                value: addr['_id'],
+                                child: Text(
+                                  '${addr['label']}: ${addr['address']}',
+                                ),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (id) {
+                          final addr = savedAddresses.firstWhere(
+                            (a) => a['_id'] == id,
+                            orElse: () => {},
+                          );
+                          if (addr.isNotEmpty) {
+                            setState(() {
+                              selectedSavedAddressId = id;
+                              _locationController.text = addr['address'] ?? '';
+                            });
+                          }
+                        },
+                      ),
+                      SizedBox(height: 16),
+                    ],
+                    // Location input
+                    _buildModernTextField(
+                      controller: _locationController,
+                      label: 'Item Location',
+                      hint: 'Enter location (city, area, etc.)',
+                      icon: Icons.location_on_outlined,
+                    ),
+                    SizedBox(height: 12),
+                    // Save address button
+                    if (_locationController.text.isNotEmpty)
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton.icon(
+                          onPressed: () => _showSaveAddressDialog(),
+                          icon: Icon(Icons.save_outlined, size: 18),
+                          label: Text('Save this address'),
+                          style: TextButton.styleFrom(
+                            foregroundColor: _primaryBlue,
+                          ),
+                        ),
+                      ),
+                    SizedBox(height: 16),
+                    // Pickup enabled checkbox
+                    Container(
+                      decoration: BoxDecoration(
+                        color: _lightGrey,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: CheckboxListTile(
+                        value: pickupEnabled,
+                        onChanged: (v) => setState(() {
+                          pickupEnabled = v ?? false;
+                          if (!pickupEnabled) {
+                            sameAsLocation = false;
+                            _pickupAddressController.clear();
+                          }
+                        }),
+                        title: Text(
+                          'Pickup Available',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: _darkSlate,
+                          ),
+                        ),
+                        subtitle: Text(
+                          'Customer can pick up the item',
+                          style: TextStyle(color: _mediumGrey, fontSize: 12),
+                        ),
+                        activeColor: _primaryBlue,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        contentPadding: EdgeInsets.symmetric(horizontal: 8),
+                      ),
+                    ),
+                    // Pickup address (shown only if pickup enabled)
+                    if (pickupEnabled) ...[
+                      SizedBox(height: 16),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: _lightGrey,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: CheckboxListTile(
+                          value: sameAsLocation,
+                          onChanged: (v) => setState(() {
+                            sameAsLocation = v ?? false;
+                            if (sameAsLocation) {
+                              _pickupAddressController.text =
+                                  _locationController.text;
+                            } else {
+                              _pickupAddressController.clear();
+                            }
+                          }),
+                          title: Text(
+                            'Same as item location',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w500,
+                              color: _darkSlate,
+                            ),
+                          ),
+                          activeColor: _primaryBlue,
+                          controlAffinity: ListTileControlAffinity.leading,
+                          contentPadding: EdgeInsets.symmetric(horizontal: 8),
+                        ),
+                      ),
+                      if (!sameAsLocation) ...[
+                        SizedBox(height: 16),
+                        _buildModernTextField(
+                          controller: _pickupAddressController,
+                          label: 'Pickup Address',
+                          hint: 'Enter pickup address',
+                          icon: Icons.local_shipping_outlined,
+                        ),
+                      ],
                     ],
                   ],
                 ),

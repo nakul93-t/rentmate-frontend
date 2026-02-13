@@ -10,6 +10,12 @@ import 'package:rentmate/screens/home/providers/review_provider.dart';
 import 'package:rentmate/screens/home/widgets/item_card.dart';
 import 'package:rentmate/screens/home/widgets/featured_banner.dart';
 import 'package:rentmate/screens/home/widgets/home_app_bar.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:rentmate/constants.dart';
+import 'package:intl/intl.dart';
+import 'package:rentmate/screens/my_listings_rentals_screen.dart';
+import 'package:rentmate/screens/rental_details_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final String? currentUserId;
@@ -32,6 +38,8 @@ class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _searchController = TextEditingController();
   final LocationService _locationService = LocationService();
   String _location = 'Azhikode';
+  List<Map<String, dynamic>> _incomingRequests = [];
+  bool _isLoadingRequests = false;
 
   @override
   void initState() {
@@ -60,6 +68,36 @@ class _HomeScreenState extends State<HomeScreen> {
     final savedLocation = await _locationService.getSavedLocation();
     if (savedLocation != null && mounted) {
       setState(() => _location = savedLocation);
+    }
+
+    // Fetch incoming requests
+    if (storedUserId != null) {
+      _fetchIncomingRequests(storedUserId!);
+    }
+  }
+
+  Future<void> _fetchIncomingRequests(String userId) async {
+    setState(() => _isLoadingRequests = true);
+    try {
+      final response = await http.get(
+        Uri.parse('$kBaseUrl/rent-request/user/$userId?role=renter'),
+      );
+      if (response.statusCode == 200 && mounted) {
+        final List<dynamic> data = json.decode(response.body);
+        setState(() {
+          _incomingRequests = data
+              .where(
+                (r) => r['status'] == 'pending' || r['status'] == 'inquiry',
+              )
+              .take(10)
+              .toList()
+              .cast<Map<String, dynamic>>();
+          _isLoadingRequests = false;
+        });
+      }
+    } catch (e) {
+      print('Error fetching requests: $e');
+      if (mounted) setState(() => _isLoadingRequests = false);
     }
   }
 
@@ -173,6 +211,7 @@ class _HomeScreenState extends State<HomeScreen> {
           await Future.wait([
             context.read<HomeProvider>().refreshItems(),
             context.read<ReviewProvider>().loadReviews(),
+            if (storedUserId != null) _fetchIncomingRequests(storedUserId!),
           ]);
         },
         color: AppColors.primaryTeal,
@@ -245,6 +284,78 @@ class _HomeScreenState extends State<HomeScreen> {
                 },
               ),
             ),
+
+            // Incoming Requests Section
+            if (_isLoadingRequests)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 24.0),
+                  child: Center(
+                    child: CircularProgressIndicator(
+                      color: AppColors.primaryTeal,
+                    ),
+                  ),
+                ),
+              )
+            else if (_incomingRequests.isNotEmpty) ...[
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        "Incoming Requests",
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => MyListingsRentalsScreen(
+                                currentUserId:
+                                    widget.currentUserId ?? storedUserId ?? '',
+                              ),
+                            ),
+                          ).then((_) {
+                            if (storedUserId != null)
+                              _fetchIncomingRequests(storedUserId!);
+                          });
+                        },
+                        child: Text(
+                          "See All",
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: AppColors.primaryTeal,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              SliverToBoxAdapter(
+                child: Container(
+                  height: 100,
+                  margin: EdgeInsets.only(bottom: 24),
+                  child: ListView.builder(
+                    padding: EdgeInsets.symmetric(horizontal: 16),
+                    scrollDirection: Axis.horizontal,
+                    itemCount: _incomingRequests.length,
+                    itemBuilder: (context, index) {
+                      final req = _incomingRequests[index];
+                      return _buildRequestCard(req);
+                    },
+                  ),
+                ),
+              ),
+            ],
 
             // Update main home screen to use providers and extracted widgets
             // Empty State with Action
@@ -425,6 +536,154 @@ class _HomeScreenState extends State<HomeScreen> {
 
             const SliverToBoxAdapter(child: SizedBox(height: 100)),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRequestCard(Map<String, dynamic> req) {
+    final item = req['itemId'];
+    final customer = req['customerId'];
+    final itemName = item?['itemName'] ?? 'Item';
+    final customerName = customer?['name'] ?? 'Customer';
+    final images = item?['images'] as List?;
+    final imageUrl = images != null && images.isNotEmpty ? images[0] : null;
+    final status = req['status'] ?? 'pending';
+    final date = req['requestedDate'] != null
+        ? DateFormat('dd MMM').format(DateTime.parse(req['requestedDate']))
+        : '';
+
+    return Container(
+      width: 280,
+      margin: EdgeInsets.only(right: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => RentalDetailsScreen(
+                  rentalId: req['_id'],
+                  currentUserId: widget.currentUserId ?? storedUserId ?? '',
+                ),
+              ),
+            ).then((_) {
+              if (storedUserId != null) _fetchIncomingRequests(storedUserId!);
+            });
+          },
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    width: 60,
+                    height: 60,
+                    color: Colors.grey[100],
+                    child: imageUrl != null
+                        ? Image.network(
+                            imageUrl,
+                            fit: BoxFit.cover,
+                            errorBuilder: (c, e, s) =>
+                                Icon(Icons.image, color: Colors.grey),
+                          )
+                        : Icon(Icons.image, color: Colors.grey),
+                  ),
+                ),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        itemName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.person_outline,
+                            size: 14,
+                            color: AppColors.textSecondary,
+                          ),
+                          SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              customerName,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textSecondary,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Container(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: status == 'pending'
+                                  ? Colors.orange.withOpacity(0.1)
+                                  : Colors.blue.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              status.toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: status == 'pending'
+                                    ? Colors.orange
+                                    : Colors.blue,
+                              ),
+                            ),
+                          ),
+                          Spacer(),
+                          if (date.isNotEmpty)
+                            Text(
+                              date,
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: AppColors.textLight,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

@@ -819,9 +819,88 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
   }
 
   Widget _buildDescription() {
+    final location = itemData!['location'];
+    final pickupEnabled = itemData!['pickupEnabled'] ?? false;
+    final pickupAddress = itemData!['pickupAddress'];
+
+    // Determine display location: pickup address if available, else location
+    final displayLocation =
+        (pickupEnabled &&
+            pickupAddress != null &&
+            pickupAddress.toString().isNotEmpty)
+        ? pickupAddress.toString()
+        : location?.toString();
+    final hasLocation = displayLocation != null && displayLocation.isNotEmpty;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Location Section
+        if (hasLocation) ...[
+          Row(
+            children: [
+              Container(
+                padding: EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryTeal.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.location_on,
+                  color: AppColors.primaryTeal,
+                  size: 20,
+                ),
+              ),
+              SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      pickupEnabled ? 'Pickup Location' : 'Location',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                    Text(
+                      displayLocation,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (pickupEnabled)
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.check_circle, color: Colors.green, size: 14),
+                      SizedBox(width: 4),
+                      Text(
+                        'Pickup',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.green,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+          SizedBox(height: 24),
+        ],
+
         Text(
           'Description',
           style: TextStyle(

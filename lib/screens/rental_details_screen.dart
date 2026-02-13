@@ -195,22 +195,60 @@ class _RentalDetailsScreenState extends State<RentalDetailsScreen> {
   }
 
   Future<void> _rejectRequest() async {
-    // Show confirmation dialog
+    final reasonController = TextEditingController();
+
+    // Show confirmation dialog with input
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Reject Request'),
-        content: Text('Are you sure you want to reject this request?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text('Reject', style: TextStyle(color: Colors.red)),
-          ),
-        ],
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) {
+          String? errorText;
+          return AlertDialog(
+            title: Text('Reject Request'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Are you sure you want to reject this request?'),
+                SizedBox(height: 16),
+                TextField(
+                  controller: reasonController,
+                  decoration: InputDecoration(
+                    hintText: 'Reason for rejection (required)',
+                    errorText: errorText,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                  ),
+                  maxLines: 3,
+                  onChanged: (_) {
+                    if (errorText != null) setState(() => errorText = null);
+                  },
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () {
+                  if (reasonController.text.trim().isEmpty) {
+                    setState(() => errorText = 'Reason is required');
+                    return;
+                  }
+                  Navigator.pop(context, true);
+                },
+                child: Text('Reject', style: TextStyle(color: Colors.red)),
+              ),
+            ],
+          );
+        },
       ),
     );
 
@@ -220,7 +258,10 @@ class _RentalDetailsScreenState extends State<RentalDetailsScreen> {
       final response = await http.put(
         Uri.parse('$baseUrl/rent-request/${widget.rentalId}/status'),
         headers: {'Content-Type': 'application/json'},
-        body: json.encode({'status': 'rejected'}),
+        body: json.encode({
+          'status': 'rejected',
+          'rejectionReason': reasonController.text.trim(),
+        }),
       );
 
       if (response.statusCode == 200) {
@@ -375,20 +416,53 @@ class _RentalDetailsScreenState extends State<RentalDetailsScreen> {
           ),
         ],
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.info_outline, color: AppColors.primaryTeal, size: 20),
-          SizedBox(width: 8),
-          Text(
-            'Status',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary,
-            ),
+          Row(
+            children: [
+              Icon(Icons.info_outline, color: AppColors.primaryTeal, size: 20),
+              SizedBox(width: 8),
+              Text(
+                'Status',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              Spacer(),
+              _buildStatusBadge(status),
+            ],
           ),
-          Spacer(),
-          _buildStatusBadge(status),
+          if (status == 'rejected' && _rental!['rejectionReason'] != null) ...[
+            Padding(
+              padding: const EdgeInsets.only(top: 12.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Divider(),
+                  SizedBox(height: 4),
+                  Text(
+                    'Reason for Rejection:',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.red,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    _rental!['rejectionReason'],
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );

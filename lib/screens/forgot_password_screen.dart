@@ -312,7 +312,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
           const SizedBox(height: 16),
           Center(
             child: TextButton(
-              onPressed: _isLoading ? null : _requestOtp,
+              onPressed: _isLoading ? null : _resendOtp,
               child: const Text(
                 'Resend OTP',
                 style: TextStyle(
@@ -542,6 +542,39 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
       } else {
         setState(() => _isLoading = false);
         _showMessage(data['message'] ?? 'Failed to send OTP');
+      }
+    } catch (e, s) {
+      log(e.toString(), stackTrace: s);
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      _showMessage('Network error. Please try again.');
+    }
+  }
+
+  // API: Resend OTP (No form validation needed as email is already entered)
+  Future<void> _resendOtp() async {
+    setState(() => _isLoading = true);
+
+    try {
+      final response = await post(
+        Uri.parse('$kBaseUrl/auth/resend-otp'),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({"email": emailController.text.trim()}),
+      ).timeout(const Duration(seconds: 30));
+
+      if (!mounted) return;
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        setState(() => _isLoading = false);
+        _showMessage(
+          data['message'] ?? 'OTP resent! Check backend console.',
+          isError: false,
+        );
+      } else {
+        setState(() => _isLoading = false);
+        _showMessage(data['message'] ?? 'Failed to resend OTP');
       }
     } catch (e, s) {
       log(e.toString(), stackTrace: s);
