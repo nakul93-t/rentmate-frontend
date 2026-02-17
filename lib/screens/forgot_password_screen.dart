@@ -518,18 +518,32 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
 
     setState(() => _isLoading = true);
 
+    final url = '$kBaseUrl/auth/forgot-password';
+    final email = emailController.text.trim();
+    print('========================================');
+    print('🔑 [FORGOT-PASSWORD] Sending request...');
+    print('🔑 [FORGOT-PASSWORD] URL: $url');
+    print('🔑 [FORGOT-PASSWORD] Email: $email');
+    print('========================================');
+
     try {
       final response = await post(
-        Uri.parse('$kBaseUrl/auth/forgot-password'),
+        Uri.parse(url),
         headers: {"Content-Type": "application/json"},
-        body: jsonEncode({"email": emailController.text.trim()}),
+        body: jsonEncode({"email": email}),
       ).timeout(const Duration(seconds: 30));
+
+      print('🔑 [FORGOT-PASSWORD] Response status: ${response.statusCode}');
+      print('🔑 [FORGOT-PASSWORD] Response body: ${response.body}');
 
       if (!mounted) return;
 
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 200) {
+        print(
+          '✅ [FORGOT-PASSWORD] OTP sent! Check BACKEND console (npm run dev terminal) for the OTP code.',
+        );
         setState(() {
           _isLoading = false;
           _currentStep = 1;
@@ -540,10 +554,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
           isError: false,
         );
       } else {
+        print('❌ [FORGOT-PASSWORD] Failed: ${data['message']}');
         setState(() => _isLoading = false);
         _showMessage(data['message'] ?? 'Failed to send OTP');
       }
     } catch (e, s) {
+      print('❌ [FORGOT-PASSWORD] Network error: $e');
       log(e.toString(), stackTrace: s);
       if (!mounted) return;
       setState(() => _isLoading = false);
